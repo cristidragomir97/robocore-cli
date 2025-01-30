@@ -178,11 +178,8 @@ class EnvironmentManager:
         and injecting RUN commands for preinstall/postinstall.
         """
         segments_dir = self.get_segments_dir()
-
         base_seg = os.path.join(segments_dir, "base.Dockerfile")
-        preinstall_seg = os.path.join(segments_dir, "preinstall.Dockerfile")
         copy_build_seg = os.path.join(segments_dir, "copy_and_build.Dockerfile")
-        postinstall_seg = os.path.join(segments_dir, "postinstall.Dockerfile")
         entrypoint_seg = os.path.join(segments_dir, "entrypoint.Dockerfile")
 
         def _read_file(fp: str) -> str:
@@ -191,9 +188,7 @@ class EnvironmentManager:
 
         # Read segment contents
         base_content = _read_file(base_seg).replace("{BASE_IMAGE}", base_image)
-        preinstall_content = _read_file(preinstall_seg)
         copy_build_content = _read_file(copy_build_seg).format(ROS_DISTRO=ros_distro)
-        postinstall_content = _read_file(postinstall_seg)
         entrypoint_content = _read_file(entrypoint_seg).format(ROS_DISTRO=ros_distro)
 
         # Gather preinstall, postinstall from the Brick's Package
@@ -214,10 +209,8 @@ class EnvironmentManager:
 
         dockerfile_content = "\n".join([
             base_content,
-            preinstall_content,
             preinstall_cmds,
             copy_build_content,
-            postinstall_content,
             postinstall_cmds,
             entrypoint_content
         ])
