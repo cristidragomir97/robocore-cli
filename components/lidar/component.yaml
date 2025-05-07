@@ -1,0 +1,7 @@
+build_context: true
+
+# The ROS 2 launch file (relative to package) to run
+launch_file: "rplidar_ros rplidar_a1_launch.py"
+
+# Any extra arguments to pass to `ros2 launch`
+launch_args: ""

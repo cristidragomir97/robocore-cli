@@ -1,0 +1,34 @@
+# project-root/config.yaml
+
+# ROS 2 settings
+ros_distro: humble
+ros_domain_id: 0
+
+# Image build & push
+image_prefix: scout                    # images: myrobot_<component>:latest
+registry: dragomirxyz
+base_image: dragomirxyz/robocore-humble
+# Deployment mode: "image" or "live"
+deploy_mode: live
+build_dir: build
+
+
+# SSHFS live-reload settings
+sshfs_mount_root: /home/cdr/ros_builds
+sshfs_options:
+  reconnect: true
+  ServerAliveInterval: 15
+  ServerAliveCountMax: 3
+
+# Where to find components
+components_dir: components
+
+# Compose file to generate/use
+compose_file: docker-compose.yml
+
+# All your target hosts
+hosts:
+  - name: main_pc
+    ip:   n100.local
+    user: cdr
+    arch: amd64

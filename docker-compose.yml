@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  lidar:
+    image: dragomirxyz/scout_lidar:latest
+    network_mode: host
+    restart: unless-stopped
+
+    # Mount the entire workspace:
+    volumes:
+      - /home/cdr/ros_builds/lidar/ros_ws:/ros_ws:ro
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - ROS_DISTRO=humble
+
+    command: >
+      bash -lc "\
+        source /opt/ros/humble/setup.bash && \
+        source /ros_ws/install/setup.bash && \
+        ros2 launch rplidar_ros rplidar_a1_launch.py \
+      "

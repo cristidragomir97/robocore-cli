@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+{% for comp in components %}
+  {{ comp.name }}:
+    image: {{ comp.image }}
+    network_mode: host
+    restart: unless-stopped
+
+    volumes:
+      - ./components/{{ comp.name }}/ros_ws/src:/ros_ws/src:ro
+      - ./components/{{ comp.name }}/ros_ws/install:/ros_ws/install:ro
+
+    environment:
+      - ROS_DOMAIN_ID={{ ros_domain_id }}
+      - ROS_DISTRO={{ ros_distro }}
+
+    command: > 
+      bash -lc "\
+        source /opt/ros/{{ ros_distro }}/setup.bash && \
+        source /ros_ws/install/setup.bash && \
+        ros2 launch {{ comp.launch_file }} {{ comp.launch_args | default('') }}\
+      "
+{% endfor %}
