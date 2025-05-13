@@ -7,8 +7,7 @@ services:
     restart: unless-stopped
 
     volumes:
-      - ./components/{{ comp.name }}/ros_ws/src:/ros_ws/src:ro
-      - ./components/{{ comp.name }}/ros_ws/install:/ros_ws/install:ro
+      - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:ro"
 
     environment:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
@@ -18,6 +17,6 @@ services:
       bash -lc "\
         source /opt/ros/{{ ros_distro }}/setup.bash && \
         source /ros_ws/install/setup.bash && \
-        ros2 launch {{ comp.launch_file }} {{ comp.launch_args | default('') }}\
+        {{ comp.entrypoint | default('') }} \
       "
 {% endfor %}

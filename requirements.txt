@@ -1,0 +1,14 @@
+# Core Docker control
+python-on-whales>=0.59.0
+
+# YAML parsing for config files
+PyYAML>=6.0
+
+# Templating engine for Dockerfile & compose rendering
+Jinja2>=3.1.0
+
+# CLI framework
+click>=8.0.0
+
+# Colored terminal output
+colorama>=0.4.6

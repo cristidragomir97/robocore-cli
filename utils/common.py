@@ -5,6 +5,8 @@ import yaml
 import subprocess
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from dataclasses import dataclass
+from dataclasses import dataclass
+from typing import List, Dict, Any
 
 @dataclass
 class Host:
@@ -13,23 +15,21 @@ class Host:
     user: str
     arch: str
 
-def load_config() -> dict:
-    cfg_path = os.path.join(os.getcwd(), 'config.yaml')
-    if not os.path.isfile(cfg_path):
-        raise FileNotFoundError(f"config.yaml not found in {os.getcwd()}")
-    return yaml.safe_load(open(cfg_path))
+def load_config(path="config.yaml") -> Dict[str,Any]:
+    import yaml
+    return yaml.safe_load(open(path))
 
-def get_hosts(cfg: dict) -> list[Host]:
-    hosts = []
-    for h in cfg.get('hosts', []):
-        hosts.append(Host(
-            name=h['name'],
-            ip=h['ip'],
-            user=h.get('user', 'root'),
-            arch=h['arch']
-        ))
-    return hosts
-
+def get_hosts(cfg: Dict[str,Any]) -> List[Host]:
+    """
+    Return a list of Host objects.
+     - If cfg['host'] is present, wrap it into a single‐element list.
+     - Otherwise use cfg['hosts'] as a list.
+    """
+    if 'host' in cfg:
+        return [Host(**cfg['host'])]
+    if 'hosts' in cfg:
+        return [Host(**h) for h in cfg['hosts']]
+    raise KeyError("config.yaml must contain either 'host' or 'hosts'")
 
 
 

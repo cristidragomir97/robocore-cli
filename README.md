@@ -12,7 +12,7 @@ Generates docker-compose.yml.
 
 ### 2. Build ROS 2 Packages: builder.py
 Runs each builder image on your dev machine, mounts in your ros_ws/src, and produces
-`build/<component>/ros_ws/install``
+`build/<component>/ros_ws/install`
 
 ### 3. Deploy: deploy.py
 Rsyncs build/<component>/ros_ws/install to each robot.
@@ -20,6 +20,27 @@ Runs docker-compose up on each robot.
 
 
 ## Notes & Tips
-- RSync optimizations (-az --inplace --no-whole-file --delete) ensure only changed files (and only changed blocks) are sent.
 
-Happy coding & safe deployments!
+### Enabling TCP socket for docker hosts.
+roscore-cli aims to be as transparent as possible to the systems installed on the robots. 
+
+1. Create `daemon.json` file in `/etc/docker`:
+
+        {"hosts": ["tcp://0.0.0.0:2375", "unix:///var/run/docker.sock"]}
+
+2. Add `/etc/systemd/system/docker.service.d/override.conf`
+
+        [Service]
+        ExecStart=
+        ExecStart=/usr/bin/dockerd
+
+3. Reload the systemd daemon:
+
+        systemctl daemon-reload
+
+4. Restart docker:
+
+        systemctl restart docker.service
+
+> [!WARNING]  
+> 
