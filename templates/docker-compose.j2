@@ -3,9 +3,9 @@ services:
 {% for comp in components %}
   {{ comp.name }}:
     image: {{ comp.image }}
-    network_mode: host
     restart: unless-stopped
 
+    # bind‐mount the full workspace
     volumes:
       - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:ro"
 
@@ -13,10 +13,31 @@ services:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
 
+{% if comp.devices %}
+    # device mappings
+    devices:
+{% for d in comp.devices %}
+      - "{{ d }}"
+{% endfor %}
+    # automatically grant required capabilities
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+{% endif %}
+
+{% if comp.ports %}
+    # port forwards
+    ports:
+{% for p in comp.ports %}
+      - "{{ p }}"
+{% endfor %}
+{% endif %}
+
+    # the actual ROS2 launch command
     command: > 
       bash -lc "\
         source /opt/ros/{{ ros_distro }}/setup.bash && \
         source /ros_ws/install/setup.bash && \
-        {{ comp.entrypoint | default('') }} \
+        {{ comp.entrypoint }} {{ comp.launch_args | default('') }} \
       "
 {% endfor %}

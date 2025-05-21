@@ -1,88 +1,144 @@
 #!/usr/bin/env python3
 import sys
-import argparse
+import os
+import argparse, traceback
 from colorama import init as colorama_init, Fore
 
-from prep import prep_main
-from build import build_main
-from deploy import deploy_main
+from commands.init   import init_main
+from commands.prep   import prep_main
+from commands.build  import build_main
+from commands.deploy import deploy_main
+from commands.shell  import shell_main
+import commands.component as component
 
-class ExitException(Exception):
-    """Signal a clean exit with a specific return code."""
-    def __init__(self, msg, code=1):
-        super().__init__(msg)
-        self.code = code
+def register_submodule_update(sp):
+    p = sp.add_parser(
+        'submodule-update',
+        help='Update Git submodules (init & pull latest remote commits)'
+    )
+    p.add_argument(
+        '-c','--component',
+        default=None,
+        help='Only update submodules for this component'
+    )
+    p.set_defaults(func=lambda args: component.update_submodules(
+        project_root=args.project_root,
+        component=args.component
+    ))
 
-def main():
-    # Initialize Colorama (auto‐reset after each print)
+
+def register_component(sp):
+    p = sp.add_parser('component', help='Manage components & their packages')
+    p.add_argument('name', help='Component name')
+    sub = p.add_subparsers(dest='comp_cmd', required=True)
+
+    # component init
+    pi = sub.add_parser('init', help='Scaffold a new component locally')
+    pi.set_defaults(func=lambda args: component.init_component(
+        project_root=args.project_root,
+        name=args.name
+    ))
+
+    # package group
+    pp = sub.add_parser('package', help='Manage packages in this component')
+    pps = pp.add_subparsers(dest='pkg_cmd', required=True)
+
+    # create
+    pc = pps.add_parser('create', help='Clone empty repo & scaffold a new ROS2 package')
+    pc.add_argument('--repo',   required=True, help='Empty GitHub repo URL')
+    pc.add_argument('--branch', help='Branch to track (defaults to main)')
+    pc.set_defaults(func=lambda args: component.create_package(
+        project_root=args.project_root,
+        component=args.name,
+        repo=args.repo,
+        branch=args.branch
+    ))
+
+    # add
+    pa = pps.add_parser('add', help='Add existing package as submodule')
+    pa.add_argument('--repo',   required=True, help='Git URL of the package')
+    pa.add_argument('--branch', help='Branch to track (defaults to remote HEAD)')
+    pa.set_defaults(func=lambda args: component.add_package(
+        project_root=args.project_root,
+        component=args.name,
+        repo=args.repo,
+        branch=args.branch
+    ))
+
+def register_init(sp):
+    p = sp.add_parser('init', help='Bootstrap a new rosdock project')
+    p.set_defaults(func=lambda args: init_main(args.project_root))
+
+def register_prep(sp):
+    p = sp.add_parser('prep', help='Generate Dockerfiles & Compose')
+    p.add_argument('-c','--component', default=None,
+                   help='Only prep this single component')
+    p.set_defaults(func=lambda args: prep_main(
+        project_root=args.project_root,
+        component=args.component
+    ))
+
+def register_build(sp):
+    p = sp.add_parser('build', help='Compile workspaces in Docker')
+    p.add_argument('-c','--component', default=None,
+                   help='Only build this single component')
+    p.set_defaults(func=lambda args: build_main(
+        project_root=args.project_root,
+        component=args.component
+    ))
+
+def register_deploy(sp):
+    p = sp.add_parser('deploy', help='Rsync builds & launch containers')
+    p.set_defaults(func=lambda args: deploy_main(
+        project_root=args.project_root
+    ))
+
+def register_shell(sp):
+    p = sp.add_parser('shell', help='Open an interactive ROS2 shell')
+    p.add_argument('path', help='Path to your ros_ws folder')
+    p.set_defaults(func=lambda args: shell.shell_main(path=args.path))
+
+def create_parser():
     colorama_init(autoreset=True)
-
     parser = argparse.ArgumentParser(
         prog="rosdock",
         description="rosdock: build & deploy ROS2 in Docker"
     )
-    parser.add_argument(
-        '-p', '--project-root',
-        default='.',
-        help='Path to the root of your rosdock solution'
-    )
+    parser.add_argument('-p','--project-root', dest='project_root',
+                        default=None, help='Path to project root')
+    parser.add_argument('project_root_pos', nargs='?',
+                        default=None, help=argparse.SUPPRESS)
 
-    subparsers = parser.add_subparsers(dest='command', required=True)
+    sp = parser.add_subparsers(dest='command', required=True)
+    register_init(sp)
+    register_component(sp)
+    register_prep(sp)
+    register_submodule_update(sp)    
+    register_build(sp)
+    register_deploy(sp)
+    register_shell(sp)
+    return parser
 
-    # prep subcommand
-    prep_parser = subparsers.add_parser(
-        'prep',
-        help='Render Dockerfiles, build & push images, and generate docker-compose.yml'
-    )
-    prep_parser.add_argument(
-        '-c', '--component',
-        default=None,
-        help='Only prep this single component'
-    )
+def main():
+    parser = create_parser()
+    args   = parser.parse_args()
 
-    # build subcommand
-    build_parser = subparsers.add_parser(
-        'build',
-        help='Compile ROS packages into build/<component>/ros_ws/install'
-    )
-    build_parser.add_argument(
-        '-c', '--component',
-        default=None,
-        help='Only build this single component'
-    )
+    pr = args.project_root or args.project_root_pos
+    if not pr:
+        parser.print_usage()
+        sys.exit("[ERROR] project root must be set via -p or as first arg")
+    args.project_root = os.path.abspath(pr)
 
-    # deploy subcommand
-    deploy_parser = subparsers.add_parser(
-        'deploy',
-        help='Rsync build artifacts to robots and bring up Docker Compose (streaming logs)'
-    )
-
-    args = parser.parse_args()
-
-    pr = args.project_root
+    if args.command != 'init' and not os.path.isdir(args.project_root):
+        sys.exit(f"[ERROR] project root '{args.project_root}' does not exist")
 
     try:
-        if args.command == 'prep':
-            print(Fore.GREEN + "[STEP] Running prep…")
-            prep_main(project_root=pr, component=args.component)
-            print(Fore.GREEN + "[OK] prep complete")
-
-        elif args.command == 'build':
-            print(Fore.GREEN + "[STEP] Running build…")
-            build_main(project_root=pr, component=args.component)
-            print(Fore.GREEN + "[OK] build complete")
-
-        elif args.command == 'deploy':
-            print(Fore.GREEN + "[STEP] Running deploy…")
-            deploy_main(project_root=pr)
-            print(Fore.GREEN + "[OK] deploy complete")
-
-    except ExitException as e:
-        print(Fore.RED + f"[ERROR] {e}", file=sys.stderr)
-        sys.exit(e.code)
-    except Exception as e:
-        print(Fore.RED + f"[UNEXPECTED ERROR] {e}", file=sys.stderr)
+        args.func(args)
+    except Exception:
+        import traceback
+        print(Fore.RED + "[ERROR] Unhandled exception:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
-if __name__ == '__main__':
+if __name__=='__main__':
     main()

@@ -1,5 +1,3 @@
-# templates/Dockerfile.builder.j2
-
 # ─── Builder Stage ────────────────────────────────────────────────────────────
 FROM {{ base_image }} AS builder
 
@@ -19,25 +17,38 @@ RUN apt-get update && apt-get install -y \
     cmake \
     python3-rosdep \
     python3-vcstool \
-    build-essential && \
-    rm -rf /var/lib/apt/lists/*
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy in source tree
-WORKDIR /
-COPY ros_ws/src /ros_ws/src
+WORKDIR /ros_ws
+COPY ros_ws/src ./src
 
 {% if preinstall %}
-# ── preinstall commands ─────────────────────────────────────────
+# ── preinstall commands ─────────────────────────────────────────────
 {% for cmd in preinstall %}
+  {% if cmd is mapping and 'script' in cmd %}
+# copy and run script: {{ cmd.script }}
+COPY {{ cmd.script }} /ros_ws/{{ cmd.script }}
+RUN chmod +x /ros_ws/{{ cmd.script }} && /ros_ws/{{ cmd.script }}
+  {% else %}
+# run arbitrary shell command
 RUN {{ cmd }}
+  {% endif %}
 {% endfor %}
 {% endif %}
 
-# Install ROS deps
-WORKDIR /ros_ws
+# Install ROS dependencies
 RUN bash -lc "\
     apt-get update && \
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     rosdep update && \
     rosdep install --from-paths src --ignore-src -y && \
-    rm -rf /var/lib/apt/lists/*"
+    rm -rf /var/lib/apt/lists/* \
+"
+
+# Build the workspace
+RUN bash -lc "\
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    colcon build --symlink-install --install-base install \
+"
