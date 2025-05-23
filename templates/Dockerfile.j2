@@ -1,54 +1,71 @@
-# ─── Builder Stage ────────────────────────────────────────────────────────────
-FROM {{ base_image }} AS builder
+# ─── STAGE 0: Dynamic Base ─────────────────────────────────────────────────
+ARG ROS_DISTRO={{ ros_distro }}
+FROM {{ cfg.registry }}/{{ cfg.image_prefix }}_base:${ROS_DISTRO} AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV ROS_DISTRO={{ ros_distro }}
+ENV ROS_DISTRO=${ROS_DISTRO}
 ENV ROS_WS=/ros_ws
 
-# Install core build tools
+# Common apt extras
 RUN apt-get update && apt-get install -y \
-    git \
+{%- for pkg in extra_apt %}
+    {{ pkg }} \
+{%- endfor %} \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install core ROS2 tools
+RUN apt-get update && apt-get install -y \
     python3-colcon-common-extensions \
-    sudo \
-    curl \
-    gnupg2 \
-    lsb-release \
-    udev \
-    cmake \
     python3-rosdep \
     python3-vcstool \
-    build-essential \
-  && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
-# Copy in source tree
-WORKDIR /ros_ws
-COPY ros_ws/src ./src
+# Bootstrap rosdep
+RUN rosdep update
 
-{% if preinstall %}
-# ── preinstall commands ─────────────────────────────────────────────
-{% for cmd in preinstall %}
-  {% if cmd is mapping and 'script' in cmd %}
-# copy and run script: {{ cmd.script }}
-COPY {{ cmd.script }} /ros_ws/{{ cmd.script }}
-RUN chmod +x /ros_ws/{{ cmd.script }} && /ros_ws/{{ cmd.script }}
-  {% else %}
-# run arbitrary shell command
-RUN {{ cmd }}
-  {% endif %}
-{% endfor %}
+# ─── STAGE 1: Common Packages Build ───────────────────────────────────────
+FROM base AS common-build
+COPY common_packages/*/ros_ws/src /ros_ws_common/src
+WORKDIR /ros_ws_common
+RUN colcon build --symlink-install --install-base install
+
+# ─── STAGE 2: Component Build ────────────────────────────────────────────
+FROM base AS comp-build
+
+# Overlay in the common build
+COPY --from=common-build /ros_ws_common/install /ros_ws/install
+
+# Copy this component’s code
+COPY {{ comp_src }} /ros_ws/src/{{ comp.name }}
+
+{% if has_repos %}
+# Import third-party repos
+COPY {{ repos_file }} /ros_ws/repos.yaml
+RUN vcs import src < /ros_ws/repos.yaml
 {% endif %}
 
-# Install ROS dependencies
-RUN bash -lc "\
-    apt-get update && \
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    rosdep update && \
-    rosdep install --from-paths src --ignore-src -y && \
-    rm -rf /var/lib/apt/lists/* \
-"
+# Any per-component preinstall scripts?
+{% for cmd in comp.preinstall or [] %}
+COPY {{ cmd.src }} /ros_ws/{{ cmd.src }}
+RUN chmod +x /ros_ws/{{ cmd.src }} && /ros_ws/{{ cmd.src }}
+{% endfor %}
 
-# Build the workspace
-RUN bash -lc "\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    colcon build --symlink-install --install-base install \
-"
+WORKDIR /ros_ws
+RUN colcon build --symlink-install --install-base install
+
+# ─── STAGE 3: Runtime ────────────────────────────────────────────────────
+FROM base AS runtime
+
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV ROS_DOMAIN_ID={{ ros_domain_id }}
+ENV ROS_WS=/ros_ws
+
+# Copy the final install tree
+COPY --from=comp-build /ros_ws/install /ros_ws/install
+
+# Source on startup
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+    echo "source /ros_ws/install/setup.bash" >> ~/.bashrc
+
+WORKDIR /ros_ws
+CMD ["bash","-lc","source /opt/ros/$ROS_DISTRO/setup.bash && exec \"$@\"", "--"]
