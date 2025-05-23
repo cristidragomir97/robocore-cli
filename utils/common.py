@@ -1,6 +1,6 @@
 # utils/common.py
 
-import os
+import os, sys
 import yaml
 import subprocess
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -24,6 +24,22 @@ class Component:
     postinstall: List[str] = None
     devices: List[str] = None
     ports: List[str] = None
+
+
+def load_cfg(CONFIG="config.yaml"):
+    if not os.path.exists(CONFIG):
+        sys.exit("[ERROR] config.yaml not found—run `rosdock init` first")
+    return yaml.safe_load(open(CONFIG))
+
+def save_cfg(cfg, CONFIG="config.yaml"):
+    yaml.safe_dump(cfg, open(CONFIG, "w"),
+                   default_flow_style=False, sort_keys=False)
+
+def sh(cmd: str, cwd: str = None):
+    print(f"$ {cmd}")
+    res = subprocess.run(cmd, shell=True, cwd=cwd)
+    if res.returncode:
+        sys.exit(f"[component] Command failed ({res.returncode}): {cmd}")
 
 def load_config(path="config.yaml") -> Dict[str,Any]:
     return yaml.safe_load(open(path))
@@ -66,9 +82,3 @@ def render_template(template_path: str, out_path: str=None, **ctx):
             f.write(rendered)
         return None
     return rendered
-
-def sh(cmd: str):
-    print(f"$ {cmd}")
-    res = subprocess.run(cmd, shell=True)
-    if res.returncode:
-        raise RuntimeError(f"Command failed ({res.returncode}): {cmd}")

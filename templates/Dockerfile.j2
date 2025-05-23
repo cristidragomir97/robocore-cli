@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
 ENV ROS_WS=/ros_ws
 
-# Install core build tools
+# Install core build tools …
 RUN apt-get update && apt-get install -y \
     git \
     python3-colcon-common-extensions \
@@ -17,38 +17,35 @@ RUN apt-get update && apt-get install -y \
     cmake \
     python3-rosdep \
     python3-vcstool \
-    build-essential \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy in source tree
-WORKDIR /ros_ws
-COPY ros_ws/src ./src
+# Copy in the component’s source tree
+WORKDIR /
+COPY {{ comp_src }} /ros_ws/src
 
-{% if preinstall %}
-# ── preinstall commands ─────────────────────────────────────────────
-{% for cmd in preinstall %}
-  {% if cmd is mapping and 'script' in cmd %}
-# copy and run script: {{ cmd.script }}
-COPY {{ cmd.script }} /ros_ws/{{ cmd.script }}
-RUN chmod +x /ros_ws/{{ cmd.script }} && /ros_ws/{{ cmd.script }}
-  {% else %}
-# run arbitrary shell command
-RUN {{ cmd }}
-  {% endif %}
+{% if common_pkgs %}
+# ─── Copy in shared/common packages ─────────────────────────────────────────
+{% for pkg in common_pkgs %}
+# shared package: {{ pkg.name }}
+COPY common_packages/{{ pkg.name }} /ros_ws/src/{{ pkg.name }}
 {% endfor %}
 {% endif %}
 
-# Install ROS dependencies
+# Pre-install hooks (if any) …
+{% if preinstall %}
+{% for cmd in preinstall %}
+COPY {{ cmd.src }} {{ cmd.dest }}
+RUN chmod +x {{ cmd.dest }} && {{ cmd.dest }}
+{% endfor %}
+{% endif %}
+
+# Install ROS deps & build…
+WORKDIR /ros_ws
 RUN bash -lc "\
     apt-get update && \
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     rosdep update && \
     rosdep install --from-paths src --ignore-src -y && \
-    rm -rf /var/lib/apt/lists/* \
-"
+    rm -rf /var/lib/apt/lists/* "
 
-# Build the workspace
-RUN bash -lc "\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    colcon build --symlink-install --install-base install \
-"

@@ -9,7 +9,43 @@ from commands.prep   import prep_main
 from commands.build  import build_main
 from commands.deploy import deploy_main
 from commands.shell  import shell_main
+from commands.common import add_common, create_common_package
 import commands.component as component
+
+
+def register_common(sp):
+    p = sp.add_parser('common', help='Manage shared/common packages')
+    sub = p.add_subparsers(dest='common_cmd', required=True)
+
+    common_add_parser = sub.add_parser(
+        'add',
+        help='Add a shared package as a git submodule under common_packages/'
+    )
+
+    common_add_parser.add_argument(
+        '--repo',
+        required=True,
+        help='Git URL of the shared package repository'
+    )
+
+    common_add_parser.add_argument(
+        '--branch',
+        help='Branch to track (defaults to main)'
+    )
+    common_add_parser.set_defaults(func=lambda args: add_common(
+        project_root=args.project_root,
+        repo=args.repo,
+        branch=args.branch
+    ))
+
+    common_create_parser = sub.add_parser('create', help='Scommon_create_parserffold a new common package')
+    common_create_parser.add_argument('--repo',   required=True, help='Git URL of the package to create')
+    common_create_parser.add_argument('--branch', help='Branch to push to (default: main)')
+    common_create_parser.set_defaults(func=lambda args: create_common_package(
+        project_root=args.project_root,
+        repo=args.repo,
+        branch=args.branch
+    ))
 
 def register_submodule_update(sp):
     p = sp.add_parser(
@@ -33,7 +69,7 @@ def register_component(sp):
     sub = p.add_subparsers(dest='comp_cmd', required=True)
 
     # component init
-    pi = sub.add_parser('init', help='Scaffold a new component locally')
+    pi = sub.add_parser('init', help='Scommon_add_parserffold a new component locommon_add_parserlly')
     pi.set_defaults(func=lambda args: component.init_component(
         project_root=args.project_root,
         name=args.name
@@ -44,7 +80,7 @@ def register_component(sp):
     pps = pp.add_subparsers(dest='pkg_cmd', required=True)
 
     # create
-    pc = pps.add_parser('create', help='Clone empty repo & scaffold a new ROS2 package')
+    pc = pps.add_parser('create', help='Clone empty repo & scommon_add_parserffold a new ROS2 package')
     pc.add_argument('--repo',   required=True, help='Empty GitHub repo URL')
     pc.add_argument('--branch', help='Branch to track (defaults to main)')
     pc.set_defaults(func=lambda args: component.create_package(
@@ -117,6 +153,7 @@ def create_parser():
     register_build(sp)
     register_deploy(sp)
     register_shell(sp)
+    register_common(sp)
     return parser
 
 def main():

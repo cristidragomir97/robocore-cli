@@ -7,23 +7,12 @@ import yaml
 from python_on_whales import DockerClient
 import tempfile 
 import shutil
+from utils.common import sh, load_cfg, save_cfg
 
 CONFIG = "config.yaml"
 
-def sh(cmd: str, cwd: str = None):
-    print(f"$ {cmd}")
-    res = subprocess.run(cmd, shell=True, cwd=cwd)
-    if res.returncode:
-        sys.exit(f"[component] Command failed ({res.returncode}): {cmd}")
 
-def load_cfg():
-    if not os.path.exists(CONFIG):
-        sys.exit("[ERROR] config.yaml not found—run `rosdock init` first")
-    return yaml.safe_load(open(CONFIG))
 
-def save_cfg(cfg):
-    yaml.safe_dump(cfg, open(CONFIG, "w"),
-                   default_flow_style=False, sort_keys=False)
 
 
 def create_package(project_root: str, component: str,
