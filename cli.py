@@ -56,9 +56,20 @@ def create_parser():
     ))
 
     # shell
-    pc = sp.add_parser('shell', help='Open an interactive ROS2 shell')
-    pc.add_argument('path', help='Path to your ros_ws folder')
-    pc.set_defaults(func=lambda args: shell_main(path=args.path))
+    pc = sp.add_parser(
+            'shell',
+            help='Open an interactive ROS2 shell for <component|common|path>'
+        )
+    
+    pc.add_argument(
+            'target',
+            help='Either a component name, "common", or a path to a ros_ws folder'
+        )
+    
+    pc.set_defaults(func=lambda args: shell_main(
+            target       = args.target,
+            project_root = args.project_root
+        ))
 
     return p
 
