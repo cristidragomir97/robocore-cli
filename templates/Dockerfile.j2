@@ -1,54 +1,111 @@
-# ─── Builder Stage ────────────────────────────────────────────────────────────
-FROM {{ base_image }} AS builder
+# ─── Component Builder ─────────────────────────────────────────────────────
+FROM {{ base_image }}
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
-ENV ROS_WS=/ros_ws
+#ENV ROS_WS=/ros_ws
 
-# Install core build tools
+# 1) Install any component-specific system packages
+{% if apt_packages %}
 RUN apt-get update && apt-get install -y \
-    git \
-    python3-colcon-common-extensions \
-    sudo \
-    curl \
-    gnupg2 \
-    lsb-release \
-    udev \
-    cmake \
-    python3-rosdep \
-    python3-vcstool \
-    build-essential \
+{%- for pkg in apt_packages %}
+    {{ pkg }} \
+{%- endfor %} \
   && rm -rf /var/lib/apt/lists/*
+{% endif %}
 
-# Copy in source tree
-WORKDIR /ros_ws
-COPY ros_ws/src ./src
+# 2) VCS repos → build into /vcs_ws/install
+{% if has_repos %}
 
-{% if preinstall %}
-# ── preinstall commands ─────────────────────────────────────────────
-{% for cmd in preinstall %}
-  {% if cmd is mapping and 'script' in cmd %}
-# copy and run script: {{ cmd.script }}
-COPY {{ cmd.script }} /ros_ws/{{ cmd.script }}
-RUN chmod +x /ros_ws/{{ cmd.script }} && /ros_ws/{{ cmd.script }}
-  {% else %}
-# run arbitrary shell command
-RUN {{ cmd }}
-  {% endif %}
+# ─── Ensure workspace exists ──────────────────────────────────────────────
+RUN mkdir -p /vcs_ws/src
+
+# ─── Import repos.yaml ────────────────────────────────────────────────────
+COPY {{ repos_file }} /vcs_ws/repos.yaml
+
+# Install vcstool if needed
+RUN apt-get update && apt-get install -y python3-vcstool && rm -rf /var/lib/apt/lists/*
+
+# Import VCS repositories
+RUN vcs import /vcs_ws/src < /vcs_ws/repos.yaml
+
+# ─── Build workspace ──────────────────────────────────────────────────────
+WORKDIR /vcs_ws
+RUN bash -lc "\
+  apt-get update && \
+  source /opt/ros/$ROS_DISTRO/setup.bash && \
+  rosdep init || true && \
+  rosdep update && \
+  rosdep install --from-paths src --ignore-src -y && \
+  colcon build --symlink-install --event-handlers console_direct+ \
+"
+
+# ─── Optional: Validate build success ─────────────────────────────────────
+RUN bash -lc "\
+  source /vcs_ws/install/setup.bash && \
+  ros2 pkg executables | grep micro_ros_setup || (echo '[ERROR] micro_ros_setup not found' && exit 1) \
+"
+
+{% if postinstall %}
+# ─── VCS Postinstall Hooks ────────────────────────────────────────────────
+{% for cmd in postinstall %}
+RUN bash -lc "\
+  source /opt/ros/$ROS_DISTRO/setup.bash && \
+  source /vcs_ws/install/setup.bash && \
+  {{ cmd }} \
+"
 {% endfor %}
 {% endif %}
 
-# Install ROS dependencies
+{% endif %}
+
+
+# 3) Copy & prepare any local source (for dependency install only)
+{% if comp_src %}
+RUN mkdir -p /ros_ws/src/{{ comp.name }}
+COPY {{ comp_src }} /ros_ws/src/{{ comp.name }}
+{% endif %}
+
+
+{% if comp_src %}
+WORKDIR /ros_ws
 RUN bash -lc "\
-    apt-get update && \
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     rosdep update && \
-    rosdep install --from-paths src --ignore-src -y && \
-    rm -rf /var/lib/apt/lists/* \
+    rosdep install \
+      --from-paths \
+        src \
+      --ignore-src -y \
 "
+{% endif %}
 
-# Build the workspace
+# ─── Runtime entrypoint ────────────────────────────────────────────────────
+# We’ll source in this order at container start:
+#   1) ROS base
+#   2) common overlay (if any)
+#   3) vcs_ws (if any)
+#   4) ros_ws (if any)
+RUN echo '#!/bin/bash'                          > /entrypoint.sh && \
+    echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> /entrypoint.sh && \
+    {% if common_ws_exists %}
+    echo 'source /ros_ws_common/install/setup.bash' >> /entrypoint.sh && \
+    {% endif %}
+    {% if has_repos %}
+    echo 'source /vcs_ws/install/setup.bash'       >> /entrypoint.sh && \
+    {% endif %}
+    {% if comp_src %}
+    echo 'source /ros_ws/install/setup.bash'       >> /entrypoint.sh && \
+    {% endif %}
+    echo 'exec "$@"'                              >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
 RUN bash -lc "\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    colcon build --symlink-install --install-base install \
-"
+    source /vcs_ws/install/setup.bash && \
+    echo '=== ros2 pkg list ===' && \
+    ros2 pkg list | grep micro_ros && \
+    echo '=== executables ===' && \
+    ros2 pkg executables | grep micro_ros \
+  "
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

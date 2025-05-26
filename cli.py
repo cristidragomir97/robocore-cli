@@ -1,141 +1,80 @@
 #!/usr/bin/env python3
-import sys
 import os
-import argparse, traceback
+import sys
+import argparse
+import traceback
 from colorama import init as colorama_init, Fore
 
-from commands.init   import init_main
-from commands.prep   import prep_main
-from commands.build  import build_main
-from commands.deploy import deploy_main
-from commands.shell  import shell_main
-import commands.component as component
-
-def register_submodule_update(sp):
-    p = sp.add_parser(
-        'submodule-update',
-        help='Update Git submodules (init & pull latest remote commits)'
-    )
-    p.add_argument(
-        '-c','--component',
-        default=None,
-        help='Only update submodules for this component'
-    )
-    p.set_defaults(func=lambda args: component.update_submodules(
-        project_root=args.project_root,
-        component=args.component
-    ))
-
-
-def register_component(sp):
-    p = sp.add_parser('component', help='Manage components & their packages')
-    p.add_argument('name', help='Component name')
-    sub = p.add_subparsers(dest='comp_cmd', required=True)
-
-    # component init
-    pi = sub.add_parser('init', help='Scaffold a new component locally')
-    pi.set_defaults(func=lambda args: component.init_component(
-        project_root=args.project_root,
-        name=args.name
-    ))
-
-    # package group
-    pp = sub.add_parser('package', help='Manage packages in this component')
-    pps = pp.add_subparsers(dest='pkg_cmd', required=True)
-
-    # create
-    pc = pps.add_parser('create', help='Clone empty repo & scaffold a new ROS2 package')
-    pc.add_argument('--repo',   required=True, help='Empty GitHub repo URL')
-    pc.add_argument('--branch', help='Branch to track (defaults to main)')
-    pc.set_defaults(func=lambda args: component.create_package(
-        project_root=args.project_root,
-        component=args.name,
-        repo=args.repo,
-        branch=args.branch
-    ))
-
-    # add
-    pa = pps.add_parser('add', help='Add existing package as submodule')
-    pa.add_argument('--repo',   required=True, help='Git URL of the package')
-    pa.add_argument('--branch', help='Branch to track (defaults to remote HEAD)')
-    pa.set_defaults(func=lambda args: component.add_package(
-        project_root=args.project_root,
-        component=args.name,
-        repo=args.repo,
-        branch=args.branch
-    ))
-
-def register_init(sp):
-    p = sp.add_parser('init', help='Bootstrap a new rosdock project')
-    p.set_defaults(func=lambda args: init_main(args.project_root))
-
-def register_prep(sp):
-    p = sp.add_parser('prep', help='Generate Dockerfiles & Compose')
-    p.add_argument('-c','--component', default=None,
-                   help='Only prep this single component')
-    p.set_defaults(func=lambda args: prep_main(
-        project_root=args.project_root,
-        component=args.component
-    ))
-
-def register_build(sp):
-    p = sp.add_parser('build', help='Compile workspaces in Docker')
-    p.add_argument('-c','--component', default=None,
-                   help='Only build this single component')
-    p.set_defaults(func=lambda args: build_main(
-        project_root=args.project_root,
-        component=args.component
-    ))
-
-def register_deploy(sp):
-    p = sp.add_parser('deploy', help='Rsync builds & launch containers')
-    p.set_defaults(func=lambda args: deploy_main(
-        project_root=args.project_root
-    ))
-
-def register_shell(sp):
-    p = sp.add_parser('shell', help='Open an interactive ROS2 shell')
-    p.add_argument('path', help='Path to your ros_ws folder')
-    p.set_defaults(func=lambda args: shell.shell_main(path=args.path))
+from commands.init    import init_main
+from commands.stage   import stage_main
+from commands.build   import build_main
+from commands.deploy  import deploy_main
+from commands.shell   import shell_main
 
 def create_parser():
     colorama_init(autoreset=True)
-    parser = argparse.ArgumentParser(
-        prog="rosdock",
-        description="rosdock: build & deploy ROS2 in Docker"
+    p = argparse.ArgumentParser(
+        prog="robocore-cli",
+        description="robocore-cli: build & deploy ROS2 in Docker"
     )
-    parser.add_argument('-p','--project-root', dest='project_root',
-                        default=None, help='Path to project root')
-    parser.add_argument('project_root_pos', nargs='?',
-                        default=None, help=argparse.SUPPRESS)
+    p.add_argument('-p','--project-root', dest='project_root',
+                   help='Path to project root')
+    p.add_argument('project_root_pos', nargs='?',
+                   help=argparse.SUPPRESS)
 
-    sp = parser.add_subparsers(dest='command', required=True)
-    register_init(sp)
-    register_component(sp)
-    register_prep(sp)
-    register_submodule_update(sp)    
-    register_build(sp)
-    register_deploy(sp)
-    register_shell(sp)
-    return parser
+    sp = p.add_subparsers(dest='command', required=True)
+
+    # init
+    pi = sp.add_parser('init', help='Bootstrap a new project')
+    pi.set_defaults(func=lambda args: init_main(args.project_root))
+
+    # stage (formerly prep)
+    ps = sp.add_parser('stage', help='Generate multi-stage Dockerfiles & Compose')
+    ps.add_argument('-c','--component', default=None,
+                    help='Only stage this single component')
+    ps.set_defaults(func=lambda args: stage_main(
+        project_root=args.project_root,
+        component=args.component
+    ))
+
+    # build
+    pb = sp.add_parser('build', help='Compile workspaces in Docker')
+    pb.add_argument('-c','--component', default=None,
+                    help='Only build this single component')
+    pb.set_defaults(func=lambda args: build_main(
+        project_root=args.project_root,
+        component=args.component
+    ))
+
+    # deploy
+    pd = sp.add_parser('deploy', help='Rsync builds & launch containers')
+    pd.add_argument('--simulate', action='store_true',
+                    help='Run only simulate:true services locally')
+    pd.set_defaults(func=lambda args: deploy_main(
+        project_root=args.project_root,
+        simulate=args.simulate
+    ))
+
+    # shell
+    pc = sp.add_parser('shell', help='Open an interactive ROS2 shell')
+    pc.add_argument('path', help='Path to your ros_ws folder')
+    pc.set_defaults(func=lambda args: shell_main(path=args.path))
+
+    return p
 
 def main():
     parser = create_parser()
     args   = parser.parse_args()
 
     pr = args.project_root or args.project_root_pos
-    if not pr:
+    if not pr and args.command!='init':
         parser.print_usage()
-        sys.exit("[ERROR] project root must be set via -p or as first arg")
-    args.project_root = os.path.abspath(pr)
-
-    if args.command != 'init' and not os.path.isdir(args.project_root):
-        sys.exit(f"[ERROR] project root '{args.project_root}' does not exist")
+        sys.exit("[ERROR] project root must be set via -p or positional")
+    args.project_root = os.path.abspath(pr) if pr else None
 
     try:
         args.func(args)
     except Exception:
-        import traceback
         print(Fore.RED + "[ERROR] Unhandled exception:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
