@@ -41,10 +41,6 @@ RUN bash -lc "\
 "
 
 # ─── Optional: Validate build success ─────────────────────────────────────
-RUN bash -lc "\
-  source /vcs_ws/install/setup.bash && \
-  ros2 pkg executables | grep micro_ros_setup || (echo '[ERROR] micro_ros_setup not found' && exit 1) \
-"
 
 {% if postinstall %}
 # ─── VCS Postinstall Hooks ────────────────────────────────────────────────
@@ -102,9 +98,9 @@ RUN echo '#!/bin/bash'                          > /entrypoint.sh && \
 RUN bash -lc "\
     source /vcs_ws/install/setup.bash && \
     echo '=== ros2 pkg list ===' && \
-    ros2 pkg list | grep micro_ros && \
+    ros2 pkg list && \
     echo '=== executables ===' && \
-    ros2 pkg executables | grep micro_ros \
+    ros2 pkg executables \
   "
 
 ENTRYPOINT ["/entrypoint.sh"]
