@@ -15,6 +15,8 @@ class Config:
         self.registry        = data['registry']
         self.image_prefix    = data['image_prefix']
 
+        self.enable_apt_caching = data.get('enable_apt_caching', False)
+
         # optional / with defaults
         self.deploy_mode     = data.get('deploy_mode', 'image')
         self.build_dir       = data.get('build_dir', 'build')
@@ -23,6 +25,9 @@ class Config:
         self.mount_root      = data.get('mount_root', f"/home/{os.getlogin()}/ros_builds")
         self.docker_port     = data.get('docker_port', 2375)
         self.tag             = data.get('tag', 'latest')
+
+        self.enable_dds_router = data.get('enable_dds_router', False)
+        self.discovery_server = data.get('discovery_server', 'localhost')
 
         
         # NEW: system‐level apt packages for the base image

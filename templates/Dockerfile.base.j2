@@ -1,6 +1,8 @@
 # ─── STAGE 0: Build ROS2 + common_packages ───────────────────────────────
 FROM ubuntu:{{ ubuntu }} AS common-builder
 
+# Fix for host.docker.internal on Linux
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     locales \
@@ -8,7 +10,10 @@ RUN apt-get update && apt-get install -y \
     gnupg2 \
     lsb-release \
     software-properties-common \
-    git && \
+    git \
+    net-tools \
+    inetutils-ping \
+    iproute2 && \
     locale-gen en_US.UTF-8 
 
 
@@ -19,6 +24,8 @@ ENV LC_ALL=en_US.UTF-8
 # Add ROS2 apt repository
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
     sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+
+RUN sed -i 's|https://packages.ros.org|http://packages.ros.org|g' /etc/apt/sources.list.d/ros2-latest.list
 
 # Install ROS2 base + build tools
 RUN apt-get update && apt-get install -y \

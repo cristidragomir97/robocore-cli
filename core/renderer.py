@@ -31,6 +31,9 @@ class TemplateRenderer:
             repos_file    = os.path.relpath(component.repos_file, cfg.root)
         )
 
+    def render_dds_router(self, out_path: str, robot_ip: str):
+        self.render("dds_router.yaml.j2", out_path, robot_ip=robot_ip)
+
     def render_compose(self, out_path, components, cfg):
         self.render(
             "docker-compose.j2",
@@ -38,7 +41,9 @@ class TemplateRenderer:
             components    = components,
             mount_root    = cfg.mount_root,
             ros_distro    = cfg.ros_distro,
-            ros_domain_id = cfg.ros_domain_id
+            ros_domain_id = cfg.ros_domain_id, 
+            enable_dds_router = cfg.enable_dds_router,
+            discovery_server = cfg.discovery_server
         )
 
     def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, apt_packages):

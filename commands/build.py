@@ -44,10 +44,6 @@ def build_main(project_root: str, component: Optional[str] = None):
 
         # prepare a clean workspace
         ws_root = os.path.join(build_root, comp_name, 'ros_ws')
-        if os.path.isdir(ws_root):
-            print(f"[build] Cleaning old workspace at {ws_root}")
-            shutil.rmtree(ws_root)
-        os.makedirs(os.path.join(ws_root, 'src'), exist_ok=True)
 
         # copy in your sources
         print(f"[build] Copying source for '{comp_name}' → {ws_root}/src")

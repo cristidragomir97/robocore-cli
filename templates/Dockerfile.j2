@@ -1,6 +1,11 @@
 # ─── Component Builder ─────────────────────────────────────────────────────
 FROM {{ base_image }}
 
+
+ENV PYTHONDONTWRITEBYTECODE=1
+
+
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
 #ENV ROS_WS=/ros_ws
@@ -58,50 +63,17 @@ RUN bash -lc "\
 
 # 3) Copy & prepare any local source (for dependency install only)
 {% if comp_src %}
-RUN mkdir -p /ros_ws/src/{{ comp.name }}
-COPY {{ comp_src }} /ros_ws/src/{{ comp.name }}
+RUN mkdir -p /ros_ws/src/
+COPY {{ comp_src }} /ros_ws/src/
 {% endif %}
 
 
 {% if comp_src %}
 WORKDIR /ros_ws
 RUN bash -lc "\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    apt-get update && \
+    source /opt/ros/$ROS_DISTRO/setup.bash && \
+    rosdep init || true && \
     rosdep update && \
-    rosdep install \
-      --from-paths \
-        src \
-      --ignore-src -y \
-"
+    rosdep install --from-paths src --ignore-src -y "
 {% endif %}
-
-# ─── Runtime entrypoint ────────────────────────────────────────────────────
-# We’ll source in this order at container start:
-#   1) ROS base
-#   2) common overlay (if any)
-#   3) vcs_ws (if any)
-#   4) ros_ws (if any)
-RUN echo '#!/bin/bash'                          > /entrypoint.sh && \
-    echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> /entrypoint.sh && \
-    {% if common_ws_exists %}
-    echo 'source /ros_ws_common/install/setup.bash' >> /entrypoint.sh && \
-    {% endif %}
-    {% if has_repos %}
-    echo 'source /vcs_ws/install/setup.bash'       >> /entrypoint.sh && \
-    {% endif %}
-    {% if comp_src %}
-    echo 'source /ros_ws/install/setup.bash'       >> /entrypoint.sh && \
-    {% endif %}
-    echo 'exec "$@"'                              >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
-
-RUN bash -lc "\
-    source /vcs_ws/install/setup.bash && \
-    echo '=== ros2 pkg list ===' && \
-    ros2 pkg list && \
-    echo '=== executables ===' && \
-    ros2 pkg executables \
-  "
-
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["bash"]

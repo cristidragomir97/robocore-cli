@@ -1,19 +1,49 @@
 version: '3.8'
 services:
+
+{% if enable_dds_router %}
+  dds_router:
+    image: dragomirxyz/fastdds_server:latest
+    container_name: dds_router
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - ROS_DOMAIN_ID=0
+      - ROS_DISCOVERY_SERVER=192.168.1.202:11811
+{% endif %}
+
+
 {% for comp in components %}
   {{ comp.name }}:
     image: {{ comp.image }}
     network_mode: host
-    restart: unless-stopped
 
-    {%- if comp.comp_src -%}
+    {% if comp.comp_src %}
     volumes:
-      - "{{ mount_root }}/{{ comp.name }}/ros_ws/install:/ros_ws/install:ro"
-    {%- endif %}
+      - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:rw"
+    {% endif %}
+
+    {% if comp.devices %}
+    devices:
+        {% for dev in comp.devices %}
+        - "{{ dev }}"
+        {% endfor %}
+    cap_add:
+        - SYS_RAWIO
+        - NET_ADMIN
+  {% endif %}
+
+    {% if comp.ports %}
+    ports:
+      {% for port in comp.ports %}
+      - "{{ port }}"
+        {% endfor %}
+    {% endif %}
 
     environment:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
+      - ROS_DISCOVERY_SERVER= {{ discovery_server }}:11811
 
     command: >
       bash -lc "\

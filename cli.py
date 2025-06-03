@@ -10,6 +10,8 @@ from commands.stage   import stage_main
 from commands.build   import build_main
 from commands.deploy  import deploy_main
 from commands.shell   import shell_main
+from commands.prepare_base import prepare_base_main
+from commands.viz import viz_main
 
 def create_parser():
     colorama_init(autoreset=True)
@@ -24,6 +26,13 @@ def create_parser():
 
     sp = p.add_subparsers(dest='command', required=True)
 
+
+    pv = sp.add_parser('viz', help='Launch local ROS2 GUI desktop (RViz, rqt) in a container')
+    pv.set_defaults(func=lambda args: viz_main(args.project_root))
+
+    pb = sp.add_parser('prepare-base', help='Build base ROS image')
+    pb.set_defaults(func=lambda args: prepare_base_main(args.project_root))
+
     # init
     pi = sp.add_parser('init', help='Bootstrap a new project')
     pi.set_defaults(func=lambda args: init_main(args.project_root))
@@ -32,9 +41,11 @@ def create_parser():
     ps = sp.add_parser('stage', help='Generate multi-stage Dockerfiles & Compose')
     ps.add_argument('-c','--component', default=None,
                     help='Only stage this single component')
+    ps.add_argument('--refresh', action='store_true', help='Only re-render docker-compose.yml')
     ps.set_defaults(func=lambda args: stage_main(
         project_root=args.project_root,
-        component=args.component
+        component=args.component, 
+        refresh=args.refresh
     ))
 
     # build
