@@ -136,15 +136,16 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 ---
 
 ## Commands
-The command set of `robocore-cli` is deliberately 
 
 ### init
 **Command**: `robocore-cli <project_folder> init`
 **Description**: Bootstrap a new project in the specified directory.
+---
 
 ### prepare-base
 **Command**: `robocore-cli <project_folder> prepare-base`
 **Description**: Creates a base image with the **ros_distro** and including the common_packages. Make sure you re-run this everytime you add a new common package. 
+---
 
 ### stage
 **Command**: `robocore-cli <project_folder> stage`
@@ -157,6 +158,7 @@ The command set of `robocore-cli` is deliberately
 
 **Flags**
 - `--refresh`: Just refreshes the `docker-compose.yaml` files, skipping any build step
+---
 
 ### build
 **Command**:  `robocore-cli <project_folder> build`
@@ -169,6 +171,8 @@ The command set of `robocore-cli` is deliberately
 **Flags**
 - `--component <name>`: Build only the specified component.
 
+---
+
 ### sync
 **Command**: `robocore-cli <project_folder> sync`
 **Description**:  The sync step transfers the compiled components and runtime files from the local machine to the target robot(s). It ensures the robot runs the latest code without needing to rebuild anything on the device, making iteration fast and deployment lightweight. During this step, for every component assigned to a host:
@@ -176,11 +180,15 @@ The command set of `robocore-cli` is deliberately
 * The install tree (built during the build step) and any necessary runtime files are prepared for transfer.
 * Using rsync, only changed files are copied to the target robot, minimizing bandwidth and time.
 
+---
+
 ### run 
 **Command**: `robocore-cli <project_folder> run`
 **Description**: This command connects to the docker daemon on each one of the hosts and launches the appropiate containers.  
 **Flags**:
 - `--host <name>`: There are siuations where we only want to start/restart the containers on one of the hosts. 
+
+---
 
 ### shell
 **Command**: `robocore-cli <project_folder> shell --component <name>`
@@ -192,6 +200,8 @@ The command set of `robocore-cli` is deliberately
 
 **Flags**:
 - `--component <name>`: The component to open the local shell for (required).
+
+---
 
 ### connect
 **Command**: `robocore-cli <project_folder> connect --component <name>`
@@ -242,6 +252,7 @@ components:
     ports:
       - "6080:80"
 ```
+---
 
 ### Run the Desktop Environment on the Development Machine 
 Instead of running GUI tools directly on the robot, you can also run them locally on your development machine using the same containerized environment—with the added benefit of better graphics performance and lower latency.
@@ -287,6 +298,7 @@ components:
 This approach however might quickly saturate your bandwidth, introducing latency in the whole computation graph, so be mindful of this tradeoff between graphical fidelity and network usage. 
 
 ---
+
 ## Networking
 Networking is at the core of any distributed ROS 2 system. `robocore-cli` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines.
 The goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
@@ -304,6 +316,8 @@ In this setup:
 * This centralizes discovery, reduces multicast traffic, and allows fine-grained control over discovery domains.
 
 Long story short, as long as your hosts are defined corectly in the config.yaml file, and are on the same subnet, the sky (and network bandwidth) is the limit. During development we reccomend having all of the hosts connected by Ethernet or Fast WiFi such as 6E or 7.
+
+---
 
 ### Multi-host systems
 
@@ -341,6 +355,8 @@ The tool will:
 * Integrate it into the same ROS 2 domain and DDS discovery graph.
 
 No code changes or manual docker fiddling required—just edit a config file and go.
+
+---
 
 #### ✅ **Example 2: Distributed Perception Stack Across Multiple Machines**
 Imagine a robot equipped with several cameras positioned around its body—for example, front, side, and rear views. Due to the computational cost of running modern deep learning inference on multiple streams, the cameras are each connected to separate Jetson devices mounted onboard. These Jetsons handle preprocessing and inference locally to reduce network and CPU load on the main computer.
@@ -425,6 +441,10 @@ robocore-cli aims to be as transparent as possible to the systems installed on t
 4. Restart docker:
 
         ```systemctl restart docker.service```
+
+---
+
+
 
 
 ### 🔐 SSH Keys
