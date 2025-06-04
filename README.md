@@ -174,8 +174,11 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 ---
 
 ### sync
+
 **Command**: `robocore-cli <project_folder> sync`
+
 **Description**:  The sync step transfers the compiled components and runtime files from the local machine to the target robot(s). It ensures the robot runs the latest code without needing to rebuild anything on the device, making iteration fast and deployment lightweight. During this step, for every component assigned to a host:
+
 
 * The install tree (built during the build step) and any necessary runtime files are prepared for transfer.
 * Using rsync, only changed files are copied to the target robot, minimizing bandwidth and time.
@@ -184,14 +187,18 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 
 ### run 
 **Command**: `robocore-cli <project_folder> run`
+
 **Description**: This command connects to the docker daemon on each one of the hosts and launches the appropiate containers.  
+
 **Flags**:
 - `--host <name>`: There are siuations where we only want to start/restart the containers on one of the hosts. 
 
 ---
 
 ### shell
+
 **Command**: `robocore-cli <project_folder> shell --component <name>`
+
 **Description**: Launches an interactive local development shell inside a container for the specified component. This is ideal for generating packages, running ROS tools, or experimenting within a fully provisioned ROS environment that mirrors your deployment image.
 * A local container is started using the component's staged image.
 * The component’s source folder (e.g., components/<name>) is mounted into the container.
@@ -200,11 +207,11 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 
 **Flags**:
 - `--component <name>`: The component to open the local shell for (required).
-
 ---
 
 ### connect
 **Command**: `robocore-cli <project_folder> connect --component <name>`
+
 **Description**: Opens an interactive shell inside the running container of a specified component on a remote robot. This is useful for debugging, inspecting runtime logs, or manually testing commands in the live environment. During this step:
 * An interactive shell is started inside the live container on the host it belongs to, with ROS fully sourced.
 * This shell connects directly to the deployed robot environment and is best used for runtime introspection—not for editing code or modifying container contents persistently.
@@ -212,15 +219,13 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 **Flags**:
 - `--component <name>`: The name of the component to connect to (required).
 
-
 ---
 
 ## Visualisation
 ROS development often requires GUI tools like rviz2, rqt, or Gazebo. Depending on your setup, you can either run these tools directly on the robot and view them remotely via VNC, or run them locally on your development machine inside the correct container environment. Both workflows are supported and help maintain consistency between development and deployment.
 
-### Run the Desktop Environment on the robot and use VNC
 
-![](https://private-user-images.githubusercontent.com/3256629/399220117-137a5272-f6a3-490f-8bfc-168d082ac949.gif?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkwNDI5MzcsIm5iZiI6MTc0OTA0MjYzNywicGF0aCI6Ii8zMjU2NjI5LzM5OTIyMDExNy0xMzdhNTI3Mi1mNmEzLTQ5MGYtOGJmYy0xNjhkMDgyYWM5NDkuZ2lmP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MDYwNCUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTA2MDRUMTMxMDM3WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9MjNkNzY2NjlhYmMyYzdhY2I3OGMwZTNhZTNiMjFjOWM0NmMxZjNmNTUzMjE5MzJhYTZlYTZhZTVhZWNmYmYyNyZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.rz1HAWD7UsSXmNcOV64cl3lqfc6x43Olk92pscO-7fY)
+### 1. Run the Desktop Environment on the robot and use VNC
 
 **How it works:**
 * A container with OpenGL and virtual display support is launched on the robot. I personally like to use (Tiryoh's docker-ros2-desktop-vnc image)[https://github.com/Tiryoh/docker-ros2-desktop-vnc]. 
@@ -252,9 +257,9 @@ components:
     ports:
       - "6080:80"
 ```
----
 
-### Run the Desktop Environment on the Development Machine 
+
+### 2.  Run the Desktop Environment on the Development Machine 
 Instead of running GUI tools directly on the robot, you can also run them locally on your development machine using the same containerized environment—with the added benefit of better graphics performance and lower latency.
 
 To do this, simply add your development machine as a host in your robot.yaml file. For example:
@@ -300,8 +305,7 @@ This approach however might quickly saturate your bandwidth, introducing latency
 ---
 
 ## Networking
-Networking is at the core of any distributed ROS 2 system. `robocore-cli` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines.
-The goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
+`robocore-cli` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines. he goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
 
 By default, all containers launched by robocore-cli use host networking. This simplifies ROS 2 communication because:
 * DDS (specifically Fast DDS or Cyclone DDS) can directly use multicast, broadcast, and unicast to discover and connect nodes.
@@ -319,12 +323,15 @@ Long story short, as long as your hosts are defined corectly in the config.yaml 
 
 ---
 
-### Multi-host systems
+## Multi-host systems
 
 One of the most powerful capabilities of the `robocore-cli` workflow is support for multi-host systems where different parts of your ROS 2 stack run on different physical machines but function as a single, seamless graph.
+
+
 By defining multiple `hosts` in your `robot.yaml` and assigning components to them via the `runs_on` field, `robocore-cli` enables developers to shift computation between machines with minimal effort. All networking, DDS discovery, and build architecture targeting are handled for you.
 
-#### ✅ **Example 1: MoveIt or Navigation Stack Initially on Dev Machine, Then Moved to Robot**
+
+### ✅ **Example 1: MoveIt or Navigation Stack Initially on Dev Machine, Then Moved to Robot**
 
 During early development, you might want to run CPU- or GPU-intensive components like MoveIt, SLAM, or the Nav2 stack on your development machine for faster iteration, easier debugging, and better performance.
 
@@ -356,9 +363,9 @@ The tool will:
 
 No code changes or manual docker fiddling required—just edit a config file and go.
 
----
 
-#### ✅ **Example 2: Distributed Perception Stack Across Multiple Machines**
+
+### ✅ **Example 2: Distributed Perception Stack Across Multiple Machines**
 Imagine a robot equipped with several cameras positioned around its body—for example, front, side, and rear views. Due to the computational cost of running modern deep learning inference on multiple streams, the cameras are each connected to separate Jetson devices mounted onboard. These Jetsons handle preprocessing and inference locally to reduce network and CPU load on the main computer.
 
 Meanwhile, a central main computer (e.g., an x86 SBC or industrial PC) acts as the coordination hub—receiving processed data from all Jetsons, fusing it, and making high-level decisions.
@@ -411,6 +418,8 @@ Advantages of this setup:
 * All components participate in a unified ROS 2 graph, coordinated by the central DDS Discovery Server.
 
 With robocore-cli, the complexity of building for mixed architectures (x86 for the main computer, ARM64 for Jetsons), syncing code, and managing the container network is abstracted away. You simply define the roles in the robot.yaml, and the tool handles staging, building, syncing, and orchestration.
+
+
 This approach scales well for robots with multi-modal perception systems and provides a clean separation of concerns across devices.
 
 ---
@@ -424,136 +433,19 @@ robocore-cli aims to be as transparent as possible to the systems installed on t
 1. Create `daemon.json` file in `/etc/docker`:
 
 ```
-        {"hosts": ["tcp://0.0.0.0:2375", "unix:///var/run/docker.sock"]}
+"hosts": ["tcp://0.0.0.0:2375", "unix:///var/run/docker.sock"]}
 ```
 
 2. Add `/etc/systemd/system/docker.service.d/override.conf`
 ```
-        [Service]
-        ExecStart=
-        ExecStart=/usr/bin/dockerd
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd
 ```
 
 3. Reload the systemd daemon:
-
-        ```systemctl daemon-reload```
+```systemctl daemon-reload```
 
 4. Restart docker:
+```systemctl restart docker.service```
 
-        ```systemctl restart docker.service```
-
----
-
-
-
-
-### 🔐 SSH Keys
-
-When working with multiple robots or development machines, repeatedly entering SSH passwords can quickly become a bottleneck—especially during `robocore-cli sync`, `connect`, or remote `shell` sessions.
-Setting up SSH key-based authentication eliminates the need for manual password entry and allows secure, unattended automation.
-
-
-#### ✅ Generate an SSH Key (if you don't have one)
-
-Check for an existing key:
-```bash
-ls ~/.ssh/id_rsa.pub
-```
-
-If the file doesn't exist, generate one:
-
-```bash
-ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
-```
-
-Just press Enter to accept the defaults. This will create:
-* `~/.ssh/id_rsa` — your private key (keep this safe!)
-* `~/.ssh/id_rsa.pub` — your public key (can be shared)
-
-
-#### ✅ Copy Your SSH Key to Each Remote Host
-Use ssh-copy-id to copy your public key to a remote host:
-
-```ssh-copy-id robot@192.168.1.101```
-
-
-Repeat for each host listed in your robot.yaml config. For example:
-
-```bash
-ssh-copy-id robot@pi5.local
-ssh-copy-id robot@jetson.local
-```
-
-This will append your public key to the remote user's `~/.ssh/authorized_keys` file and set correct permissions.
-
-### ⏰ Time Synchronisation
-For DDS to function reliably across machines—and especially for ROS 2 tools that depend on timestamps (e.g., TF, RViz, and sensor fusion)—clock synchronization is critical.
-
-robocore-cli assumes that:
-
-* All hosts (robots and development machines) are synced via NTP or Chrony.
-* The system clocks are within a tight tolerance (typically <1 second drift).
-
-If clocks are not in sync, you may experience:
-
-* Inconsistent TF transforms or warnings in rviz2
-* rosbag2 recording incorrect timestamps
-* Sensor fusion or SLAM systems behaving erratically
-
-Time sync is not handled by robocore-cli directly, but it is a required infrastructure layer—especially in hybrid deployments. We recommend configuring NTP on all hosts, or using chrony for more accurate local sync in constrained networks.
-
-### 🔧 Option 1: Use NTP (Network Time Protocol)
-
-This is the most widely supported method.
-
-```bash
-sudo apt install ntp
-```
-
-Then edit `/etc/ntp.conf` (optional) to point to your local or public NTP servers.
-
-Start and enable the service:
-
-```baah
-sudo systemctl enable ntp
-sudo systemctl start ntp
-```
-
-To check sync status:
-
-```
-ntpq -p
-```
-
-### 🔧 Option 2: Use Chrony (for faster convergence & offline setups)
-
-Install crhony on all machines: 
-```bash
-sudo apt install chrony
-```
-
-#### On your main reference machine 
-
-1. Edit /etc/chrony/chrony.conf:
-
-```
-# Comment out public servers
-# pool ntp.ubuntu.com ...
-
-# Allow your robot subnet
-allow 192.168.1.0/24
-
-# Act as a time source
-local stratum 10
-```
-
-2. Restart the crhony service:
-`sudo systemctl restart chrony`
-
-#### On your client machines
-
-1. Edit /etc/chrony/chrony.conf and add:
-`server 192.168.1.100 iburst   # IP of your main reference machine`
-
-2. Restart the crhony service:
-`sudo systemctl restart chrony`
