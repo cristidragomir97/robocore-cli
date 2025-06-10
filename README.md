@@ -138,17 +138,25 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 ## Commands
 
 ### init
+
 **Command**: `robocore-cli <project_folder> init`
+
 **Description**: Bootstrap a new project in the specified directory.
+
 ---
 
 ### prepare-base
+
 **Command**: `robocore-cli <project_folder> prepare-base`
+
 **Description**: Creates a base image with the **ros_distro** and including the common_packages. Make sure you re-run this everytime you add a new common package. 
+
 ---
 
 ### stage
+
 **Command**: `robocore-cli <project_folder> stage`
+
 **Description**: The stage step is where each component's container image is prepared with all its required dependencies, but without compiling or adding the actual application code yet. During this step, for every package:
 
 * The base image (e.g., a minimal ROS image) is pulled.
@@ -161,7 +169,9 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 ---
 
 ### build
+
 **Command**:  `robocore-cli <project_folder> build`
+
 **Description**:  The build step compiles the actual ROS workspace for each component using the environment prepared during the stage step. This process happens locally, inside the corresponding container, ensuring that builds are isolated, repeatable, and platform-appropriate. During this step, for every component:
 * The corresponding stage container is started locally.
 * The component’s local ROS workspace (ros_ws) is mounted into the container.
@@ -186,6 +196,8 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 ---
 
 ### run 
+
+
 **Command**: `robocore-cli <project_folder> run`
 
 **Description**: This command connects to the docker daemon on each one of the hosts and launches the appropiate containers.  
