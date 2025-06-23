@@ -10,6 +10,7 @@ class Host:
     user: str
     arch: str
     port: int = 2375
+    manager: bool = False  # ← NEW
 
 @dataclass
 class RepositorySpec:

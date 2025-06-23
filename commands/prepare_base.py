@@ -6,34 +6,42 @@ import os
 import sys
 
 def prepare_base_main(project_root: str):
-    project_root = os.path.abspath(project_root)
-    os.chdir(project_root)
-
     cfg = Config.load(project_root)
-    renderer = TemplateRenderer(os.path.join(
-        os.path.dirname(__file__), '..', 'templates'))
+    tpl_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+    renderer = TemplateRenderer(tpl_dir)
     docker = DockerHelper()
 
-    ubuntu_map = {"humble": "jammy", "galactic": "jammy", "foxy": "focal"}
-    ubuntu     = ubuntu_map.get(cfg.ros_distro, "jammy")
-    base_df    = os.path.join(".", "Dockerfile.base")
+    # Map ROS distro to Ubuntu release
+    ubuntu_map = {
+        "humble": "jammy",
+        "galactic": "jammy",
+        "foxy": "focal"
+    }
+    ubuntu = ubuntu_map.get(cfg.ros_distro, "jammy")
+
+    # Generate Dockerfile.base
+    base_dir = os.path.join(project_root, "base")
+    os.makedirs(base_dir, exist_ok=True)
+    base_dockerfile = os.path.join(base_dir, "Dockerfile.base")
+    print(base_dockerfile)
 
     renderer.render_base(
-        out_path     = base_df,
-        ros_distro   = cfg.ros_distro,
-        ubuntu       = ubuntu,
-        common_pkgs  = cfg.common_packages,
-        apt_packages = cfg.apt_packages
+        out_path=base_dockerfile,
+        ros_distro=cfg.ros_distro,
+        ubuntu=ubuntu,
+        common_pkgs=cfg.common_packages,
     )
-    if not os.path.isfile(base_df):
-        sys.exit(f"[prepare_base] ERROR: {base_df} missing after render")
 
     base_tag = f"{cfg.registry}/{cfg.image_prefix}_base:{cfg.ros_distro}-{cfg.tag}"
-    print(f"[prepare_base] Building base image → {base_tag}")
+
+    # Collect all unique target platforms from host definitions
+    platforms = list({f"linux/{host.arch}" for host in cfg.hosts})
+
+    print(f"[prepare_base] Building base image {base_tag} for: {', '.join(platforms)}")
     docker.build_multiarch(
-        image_tag  = base_tag,
-        context    = ".",
-        dockerfile = "Dockerfile.base",
-        platforms  = cfg.platforms,
-        push       = True
+        image_tag=base_tag,
+        context=base_dir,
+        dockerfile=base_dockerfile,
+        platforms=platforms,
+        push=True
     )

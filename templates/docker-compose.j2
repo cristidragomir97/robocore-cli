@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - ROS_DOMAIN_ID=0
-      - ROS_DISCOVERY_SERVER=192.168.1.202:11811
+      - ROS_DISCOVERY_SERVER={{ discovery_server }}
 {% endif %}
 
 
@@ -43,7 +43,7 @@ services:
     environment:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
-      - ROS_DISCOVERY_SERVER= {{ discovery_server }}:11811
+      - ROS_DISCOVERY_SERVER={{ discovery_server }}
 
     command: >
       bash -lc "\
@@ -59,3 +59,18 @@ services:
         {{ comp.entrypoint }} {{ comp.launch_args }}
       "
 {% endfor %}
+
+
+{% if dds_manager %}
+  dds_server:
+    image: {{ cfg.registry }}/robocore-{{ cfg.ros_distro }}
+    container_name: dds_server
+    network_mode: host
+    environment:
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    command: >
+      bash -lc "
+        source /opt/ros/{{ cfg.ros_distro }}/setup.bash &&
+        fastdds discovery -i 0 -l {{ dds_manager.ip }} -p 11811
+      "
+{% endif %}

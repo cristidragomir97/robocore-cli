@@ -1,10 +1,7 @@
 # ─── Component Builder ─────────────────────────────────────────────────────
 FROM {{ base_image }}
 
-
 ENV PYTHONDONTWRITEBYTECODE=1
-
-
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
@@ -62,13 +59,13 @@ RUN bash -lc "\
 
 
 # 3) Copy & prepare any local source (for dependency install only)
-{% if comp_src %}
+{% if comp_src_exists %}
 RUN mkdir -p /ros_ws/src/
 COPY {{ comp_src }} /ros_ws/src/
 {% endif %}
 
 
-{% if comp_src %}
+{% if comp_src_exists %}
 WORKDIR /ros_ws
 RUN bash -lc "\
     apt-get update && \
@@ -77,3 +74,10 @@ RUN bash -lc "\
     rosdep update && \
     rosdep install --from-paths src --ignore-src -y "
 {% endif %}
+
+
+# DDS Discovery Server config
+COPY {{ superclient_path }} /superclient.xml
+ENV FASTRTPS_DEFAULT_PROFILES_FILE=/superclient.xml
+ENV ROS_DISCOVERY_SERVER={{ dds_server_ip }}:11811
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp

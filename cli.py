@@ -61,11 +61,13 @@ def create_parser():
     pd = sp.add_parser('deploy', help='Rsync builds & launch containers')
     pd.add_argument('--simulate', action='store_true',
                     help='Run only simulate:true services locally')
+    pd.add_argument('--host', default=None,
+                    help='Only deploy to this host (name from config.yaml)')
     pd.set_defaults(func=lambda args: deploy_main(
         project_root=args.project_root,
-        simulate=args.simulate
+        simulate=args.simulate,
+        host_name=args.host
     ))
-
     # shell
     pc = sp.add_parser(
             'shell',
