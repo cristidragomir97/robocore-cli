@@ -20,7 +20,7 @@ def prepare_base_main(project_root: str):
     ubuntu = ubuntu_map.get(cfg.ros_distro, "jammy")
 
     # Generate Dockerfile.base
-    base_dir = os.path.join(project_root, "base")
+    base_dir = os.path.join(project_root, ".robocore", "base")
     os.makedirs(base_dir, exist_ok=True)
     base_dockerfile = os.path.join(base_dir, "Dockerfile.base")
     print(base_dockerfile)
@@ -30,6 +30,7 @@ def prepare_base_main(project_root: str):
         ros_distro=cfg.ros_distro,
         ubuntu=ubuntu,
         common_pkgs=cfg.common_packages,
+        workspace_dir=cfg.workspace_dir,
     )
 
     base_tag = f"{cfg.registry}/{cfg.image_prefix}_base:{cfg.ros_distro}-{cfg.tag}"
@@ -38,9 +39,10 @@ def prepare_base_main(project_root: str):
     platforms = list({f"linux/{host.arch}" for host in cfg.hosts})
 
     print(f"[prepare_base] Building base image {base_tag} for: {', '.join(platforms)}")
+    # Use project root as context so COPY commands in Dockerfile can access source paths
     docker.build_multiarch(
         image_tag=base_tag,
-        context=base_dir,
+        context=project_root,
         dockerfile=base_dockerfile,
         platforms=platforms,
         push=True

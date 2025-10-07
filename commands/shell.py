@@ -61,11 +61,11 @@ def shell_main(target: str,
             if comp.repositories:
                 source_lines.append("source /vcs_ws/install/setup.bash")
 
-            ros_ws_src = os.path.join(pr, "components", comp.name, "ros_ws", "src")
+            ros_ws_src = os.path.join(pr, "components", comp.name, cfg.workspace_dir, "src")
             os.makedirs(ros_ws_src, exist_ok=True)  # ← create it if needed
             mounts.append((ros_ws_src, "/ros_ws/src", "rw"))
 
-            ros_ws_install = os.path.join(pr, "components", comp.name, "ros_ws", "install")
+            ros_ws_install = os.path.join(pr, "components", comp.name, cfg.workspace_dir, "install")
             if os.path.isdir(ros_ws_install):
                 source_lines.append("source /ros_ws/install/setup.bash")
         else:

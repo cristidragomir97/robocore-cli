@@ -1,7 +1,7 @@
 # core/config.py
 import os
 import yaml
-from .models import Host, Component
+from .models import Host, Component, CommonPackage
 
 class Config:
     def __init__(self, data, root):
@@ -19,8 +19,9 @@ class Config:
 
         # optional / with defaults
         self.deploy_mode     = data.get('deploy_mode', 'image')
-        self.build_dir       = data.get('build_dir', 'build')
+        self.build_dir       = data.get('build_dir', '.robocore/build')
         self.components_dir  = data.get('components_dir', 'components')
+        self.workspace_dir   = data.get('workspace_dir', 'ros_ws')
         self.compose_file    = data.get('compose_file', 'docker-compose.yml')
         self.mount_root      = data.get('mount_root', f"/home/{os.getlogin()}/ros_builds")
         self.docker_port     = data.get('docker_port', 2375)
@@ -35,11 +36,11 @@ class Config:
 
         # coalesce None→[] for common & components
         common = data.get('common_packages') or []
-        self.common_packages = [ Component.from_dict(c, is_common=True)
+        self.common_packages = [ CommonPackage.from_dict(c)
                                  for c in common ]
 
         comps  = data.get('components') or []
-        self.components      = [ Component.from_dict(c, is_common=False)
+        self.components      = [ Component.from_dict(c, is_common=False, workspace_dir=self.workspace_dir)
                                  for c in comps ]
 
         # hosts: support either list or single dict

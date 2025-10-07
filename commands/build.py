@@ -34,20 +34,33 @@ def build_main(project_root: str, component: Optional[str] = None):
     # 3) loop
     for comp in comps:
         comp_name = comp.name
-        comp_dir  = os.path.abspath(comp.folder)
-        src_dir   = os.path.join(comp_dir, 'ros_ws', 'src')
+
+        # Determine source directory (new managed workspace or legacy)
+        if comp.folder:
+            # Legacy support
+            comp_dir = os.path.abspath(comp.folder)
+            src_dir = os.path.join(comp_dir, cfg.workspace_dir, 'src')
+        else:
+            # Use managed workspace
+            managed_workspace = os.path.join(project_root, comp.managed_workspace)
+            src_dir = os.path.join(managed_workspace, 'src')
 
         # only build if there's local source
-        if not os.path.isdir(src_dir):
-            print(f"[build] Skipping '{comp_name}' (no local ros_ws/src)")
+        if not os.path.exists(src_dir) or not os.listdir(src_dir):
+            print(f"[build] Skipping '{comp_name}' (no source packages found)")
             continue
 
         # prepare a clean workspace
-        ws_root = os.path.join(build_root, comp_name, 'ros_ws')
+        ws_root = os.path.join(build_root, comp_name, cfg.workspace_dir)
 
         # copy in your sources
         print(f"[build] Copying source for '{comp_name}' → {ws_root}/src")
-        shutil.copytree(src_dir, os.path.join(ws_root, 'src'), dirs_exist_ok=True)
+        if os.path.exists(os.path.join(ws_root, 'src')):
+            shutil.rmtree(os.path.join(ws_root, 'src'))
+
+        # Handle symlinks properly - copy the actual content, not the symlinks
+        shutil.copytree(src_dir, os.path.join(ws_root, 'src'),
+                       dirs_exist_ok=True, symlinks=False, copy_function=shutil.copy2)
 
         # load any post-install hooks
         # (your Component model should expose postinstall as a List[str])

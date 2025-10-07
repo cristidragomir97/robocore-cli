@@ -45,10 +45,15 @@ services:
       - ROS_DISTRO={{ ros_distro }}
       - ROS_DISCOVERY_SERVER={{ discovery_server }}
 
+    {% if comp.entrypoint %}
     command: >
       bash -lc "\
         # always source core ROS
         source /opt/ros/{{ ros_distro }}/setup.bash && \
+        {%- if has_common_packages -%}
+        # source common packages from base image
+        source /ros_ws_common/install/setup.bash && \
+        {%- endif -%}
 
         {%- if comp.has_repos -%}
         source /vcs_ws/install/setup.bash && \
@@ -58,6 +63,25 @@ services:
         {%- endif -%}
         {{ comp.entrypoint }} {{ comp.launch_args }}
       "
+    {% else %}
+    command: >
+      bash -lc "\
+        # always source core ROS
+        source /opt/ros/{{ ros_distro }}/setup.bash && \
+        {%- if has_common_packages -%}
+        # source common packages from base image
+        source /ros_ws_common/install/setup.bash && \
+        {%- endif -%}
+
+        {%- if comp.has_repos -%}
+        source /vcs_ws/install/setup.bash && \
+        {%- endif -%}
+        {%- if comp.comp_src -%}
+        source /ros_ws/install/setup.bash && \
+        {%- endif -%}
+        tail -f /dev/null
+      "
+    {% endif %}
 {% endfor %}
 
 

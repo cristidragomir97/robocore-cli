@@ -33,21 +33,66 @@ RUN apt-get update && apt-get install -y \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-pip && \
-    pip3 install -U vcstool \
+    pip3 install -U vcstool && \
     rosdep init
 
+
+
 # Overlay your shared packages
+WORKDIR /ros_ws_common
+
+{% set has_vcs = common_pkgs | selectattr('is_vcs_based') | list | length > 0 %}
+{% set has_local = common_pkgs | selectattr('is_local_based') | list | length > 0 %}
+{% set has_any_packages = has_vcs or has_local %}
+
+{% if has_any_packages %}
+# Create src directory
+RUN mkdir -p src
+
+# VCS-based packages: generate repos.yaml and import with vcstool
+{% if has_vcs %}
+COPY <<EOF /tmp/repos.yaml
+repositories:
 {% for pkg in common_pkgs %}
-COPY {{ pkg.folder }}/ros_ws/src/{{ pkg.name }} /ros_ws_common/src/{{ pkg.name }}
+{% if pkg.is_vcs_based %}
+{% for repo in pkg.repositories %}
+  {{ repo.folder }}:
+    type: git
+    url: {{ repo.url }}
+    version: {{ repo.version }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+EOF
+
+RUN vcs import src < /tmp/repos.yaml
+{% endif %}
+
+# Local source-based packages: copy directly
+{% for pkg in common_pkgs %}
+{% if pkg.is_local_based %}
+{% for src_path in pkg.source %}
+COPY {{ src_path }} /ros_ws_common/src/
+{% endfor %}
+{% endif %}
 {% endfor %}
 
-WORKDIR /ros_ws_common
-RUN colcon build --symlink-install --install-base install
+# Install dependencies with rosdep
+RUN rosdep update && \
+    . /opt/ros/{{ ros_distro }}/setup.sh && \
+    rosdep install --from-paths src --ignore-src -r -y
+
+# Build all packages
+RUN . /opt/ros/{{ ros_distro }}/setup.sh && colcon build --symlink-install --install-base install
+
+{% endif %}
 
 
 # automatically source ROS2 and common overlay
-RUN echo "source /opt/ros/{{ ros_distro }}/setup.bash" >> ~/.bashrc && \
-    echo "source /ros_ws_common/install/setup.bash" >> ~/.bashrc
+RUN echo "source /opt/ros/{{ ros_distro }}/setup.bash" >> ~/.bashrc
+{% if has_any_packages %}
+RUN echo "source /ros_ws_common/install/setup.bash" >> ~/.bashrc
+{% endif %}
 
 ENTRYPOINT ["/bin/bash","-lc","exec \"$@\"","--"]
 CMD ["bash"]

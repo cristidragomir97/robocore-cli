@@ -1,4 +1,5 @@
 # core/docker.py
+import python_on_whales
 from python_on_whales import DockerClient
 
 class DockerHelper:
@@ -16,15 +17,19 @@ class DockerHelper:
         cc.pull(image)
 
     def build_multiarch(self, image_tag, context, dockerfile, platforms, push=True):
-        self.client.buildx.build(
-            context,
-            file=dockerfile,
-            platforms=platforms,
-            tags=[image_tag],
-            push=push, 
-            progress='plain', 
-            cache=True
-        )
+        try:
+            self.client.buildx.build(
+                context,
+                file=dockerfile,
+                platforms=platforms,
+                tags=[image_tag],
+                push=push,
+                progress='plain',
+                cache=True
+            )
+        except python_on_whales.exceptions.DockerException as e:
+            print(f"Docker error: {e}")
+            raise
 
     def run_builder(self, image, workdir, command, mounts, envs):
         self.client.run(

@@ -12,6 +12,7 @@ from commands.deploy  import deploy_main
 from commands.shell   import shell_main
 from commands.prepare_base import prepare_base_main
 from commands.viz import viz_main
+from commands.clean import clean_main
 
 def create_parser():
     colorama_init(autoreset=True)
@@ -73,16 +74,28 @@ def create_parser():
             'shell',
             help='Open an interactive ROS2 shell for <component|common|path>'
         )
-    
+
     pc.add_argument(
             'target',
             help='Either a component name, "common", or a path to a ros_ws folder'
         )
-    
+
     pc.set_defaults(func=lambda args: shell_main(
             target       = args.target,
             project_root = args.project_root
         ))
+
+    # clean
+    pcl = sp.add_parser('clean', help='Remove build artifacts and workspaces')
+    pcl.add_argument('-r', '--remote', action='store_true',
+                     help='Also clean remote hosts')
+    pcl.add_argument('--local-only', action='store_true',
+                     help='Clean only local artifacts (overrides -r)')
+    pcl.set_defaults(func=lambda args: clean_main(
+        project_root=args.project_root,
+        remote=args.remote and not args.local_only,
+        local=True
+    ))
 
     return p
 
@@ -98,6 +111,9 @@ def main():
 
     try:
         args.func(args)
+    except KeyboardInterrupt:
+        print(Fore.YELLOW + "\n[INFO] Interrupted by user", file=sys.stderr)
+        sys.exit(130)
     except Exception:
         print(Fore.RED + "[ERROR] Unhandled exception:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)

@@ -85,16 +85,27 @@ hosts:
 
 
 ### 3. Common packages
-Define any packages or libraries that should be available in all components:
+Define any packages or libraries that should be available in all components. You can use either VCS-based repositories or local source folders:
 
 ```yaml
 common_packages:
+  # VCS-based package (one or more repositories)
   - name: my_msgs
-    folder: common_packages/my_msgs
-    repo: https://github.com/you/my_msgs.git
-    branch: main
+    repositories:
+      - url: https://github.com/you/my_msgs.git
+        version: main
+        # folder is optional - auto-derived from URL if not specified
+      - url: https://github.com/you/my_msgs_extras.git
+        version: develop
+
+  # Local source package (one or more folders)
+  - name: leremix_control
+    source:
+      - ros_ws/leremix_control
+      - ros_ws/leremix_control_plugin
+      - ros_ws/leremix_servo_manager
 ```
-These are included in the base image so they don’t get duplicated per component—saving build time and storage.
+These are included in the base image so they don't get duplicated per component—saving build time and storage.
 
 ### 4. Components – Modular, Swappable Units
 
@@ -174,8 +185,8 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 
 **Description**:  The build step compiles the actual ROS workspace for each component using the environment prepared during the stage step. This process happens locally, inside the corresponding container, ensuring that builds are isolated, repeatable, and platform-appropriate. During this step, for every component:
 * The corresponding stage container is started locally.
-* The component’s local ROS workspace (ros_ws) is mounted into the container.
-* The workspace is built using colcon, with output artifacts written to the install/ and build/ folders on the host.
+* The component's workspace is mounted into the container from `.robocore/build/{component}/ros_ws/`.
+* The workspace is built using colcon, with output artifacts written to the install/ and build/ folders within the managed workspace.
 * These artifacts are not embedded into the image, keeping the final runtime image clean and enabling fast rebuilds.
 
 **Flags**

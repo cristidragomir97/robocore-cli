@@ -27,6 +27,7 @@ class TemplateRenderer:
                         repos_file: str,
                         superclient_path: str,
                         apt_packages,
+                        pip_packages,
                         postinstall,
                         has_repos: bool,
                         comp_src_exists: bool,
@@ -43,6 +44,7 @@ class TemplateRenderer:
             repos_file=repos_file,
             superclient_path=superclient_path,
             apt_packages=apt_packages,
+            pip_packages=pip_packages,
             postinstall=postinstall,
             has_repos=has_repos,
             comp_src_exists=comp_src_exists,
@@ -72,13 +74,14 @@ class TemplateRenderer:
             components    = components,
             mount_root    = cfg.mount_root,
             ros_distro    = cfg.ros_distro,
-            ros_domain_id = cfg.ros_domain_id, 
+            ros_domain_id = cfg.ros_domain_id,
             enable_dds_router = cfg.enable_dds_router,
             discovery_server = cfg.discovery_server,
-            dds_manager       = dds_manager
+            dds_manager       = dds_manager,
+            has_common_packages = bool(cfg.common_packages)
         )
 
-    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, apt_packages = []):
+    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = []):
             """
             Render Dockerfile.base.j2 → out_path
             """
@@ -88,5 +91,6 @@ class TemplateRenderer:
                 ros_distro   = ros_distro,
                 ubuntu       = ubuntu,
                 common_pkgs  = common_pkgs,
+                workspace_dir= workspace_dir,
                 apt_packages = apt_packages or []
             )
