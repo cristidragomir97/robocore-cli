@@ -10,7 +10,19 @@ class Host:
     user: str
     arch: str
     port: int = 2375
-    manager: bool = False  # ← NEW
+    manager: bool = False
+    dds_ip: Optional[str] = None  # Secondary IP for DDS communication
+    mount_root: Optional[str] = None  # Remote mount root directory
+
+    @property
+    def effective_dds_ip(self) -> str:
+        """Return dds_ip if set, otherwise fall back to ip."""
+        return self.dds_ip if self.dds_ip else self.ip
+
+    @property
+    def effective_mount_root(self) -> str:
+        """Return mount_root if set, otherwise fall back to default."""
+        return self.mount_root if self.mount_root else f"/home/{self.user}/robocore-artifacts"
 
 @dataclass
 class RepositorySpec:
@@ -70,15 +82,18 @@ class CommonPackage:
 @dataclass
 class Component:
     name: str
-    # New source fields
+    # Source configuration (mutually exclusive)
     sources: List[str] = field(default_factory=list)  # Multiple source paths
     source: Optional[str] = None                      # Single source path
-    # Legacy field for backward compatibility
-    folder: Optional[str] = None
+    folder: Optional[str] = None                      # Legacy (deprecated)
+    build: Optional[str] = None                       # Path to custom Dockerfile directory
+    image: Optional[str] = None                       # External pre-built image
+
     entrypoint: str = ""
     launch_args: str = ""
     devices: List[str] = field(default_factory=list)
     ports:   List[str] = field(default_factory=list)
+    environment: dict = field(default_factory=dict)  # Environment variables
     preinstall:  List[str] = field(default_factory=list)
     runs_on: Optional[str] = None
     postinstall: List[str] = field(default_factory=list)
@@ -86,17 +101,24 @@ class Component:
     apt_packages: List[str] = field(default_factory=list)
     pip_packages: List[str] = field(default_factory=list)
     simulate: bool = False
-    image: Optional[str] = None
     workspace_dir: str = "ros_ws"  # Configurable workspace directory name
+    # Performance optimisations
+    shm_size: Optional[str] = None     # e.g., "512m"
+    ipc_mode: Optional[str] = None     # e.g., "host"
+    cpuset: Optional[str] = None       # e.g., "0,1" for pinned cores
+    mount_shm: bool = False            # Mount /dev/shm from host
+    rt_enabled: bool = False           # Enable real-time kernel capabilities
 
     @classmethod
     def from_dict(cls, d, is_common=False, workspace_dir="ros_ws"):
         repos = [RepositorySpec.from_dict(r) for r in d.get('repositories', [])]
 
-        # Handle new source fields and backward compatibility
+        # Handle source fields and backward compatibility
         sources = d.get('sources', [])
         source = d.get('source')
         folder = d.get('folder')
+        build = d.get('build')
+        image = d.get('image')
 
         # Normalize source field: if source is a list, move to sources
         if source and isinstance(source, list):
@@ -104,21 +126,49 @@ class Component:
             source = None
 
         # Backward compatibility warning
-        if folder and not sources and not source:
+        if folder and not sources and not source and not build and not image:
             print(f"WARNING: Component '{d['name']}' uses deprecated 'folder' field. "
                   f"Consider migrating to 'source' or 'sources' fields.")
             source = folder  # Migrate folder to source
             folder = None
+
+        # Parse optimisations
+        shm_size = None
+        ipc_mode = None
+        cpuset = None
+        mount_shm = False
+        rt_enabled = False
+        optimisations = d.get('optimisations', [])
+        if optimisations:
+            for opt in optimisations:
+                if 'shm' in opt:
+                    shm_size = opt['shm']
+                elif 'ipc' in opt:
+                    ipc_mode = opt['ipc']
+                elif 'pinned_cores' in opt:
+                    cores = opt['pinned_cores']
+                    # Convert list [0, 1] to string "0,1"
+                    if isinstance(cores, list):
+                        cpuset = ','.join(map(str, cores))
+                    else:
+                        cpuset = str(cores)
+                elif 'mount_shm' in opt:
+                    mount_shm = opt['mount_shm']
+                elif 'rt' in opt:
+                    rt_enabled = opt['rt']
 
         return cls(
             name        = d['name'],
             sources     = sources,
             source      = source,
             folder      = folder,
+            build       = build,
+            image       = image,
             entrypoint  = d.get('entrypoint', ""),
             launch_args = d.get('launch_args', ""),
             devices     = d.get('devices', []),
             ports       = d.get('ports', []),
+            environment = d.get('environment', {}),
             preinstall  = d.get('preinstall', []),
             postinstall = d.get('postinstall', []),
             repositories= repos,
@@ -126,8 +176,12 @@ class Component:
             apt_packages= d.get('apt_packages', []),
             pip_packages= d.get('pip_packages', []),
             runs_on     = d.get('runs_on', None),
-            image       = d.get('image', None),
             workspace_dir= workspace_dir,
+            shm_size    = shm_size,
+            ipc_mode    = ipc_mode,
+            cpuset      = cpuset,
+            mount_shm   = mount_shm,
+            rt_enabled  = rt_enabled,
         )
 
     @property

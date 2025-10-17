@@ -188,6 +188,7 @@ components:
     launch_args: <string>             # Optional: Arguments for entrypoint
     devices: <list of strings>        # Optional: Device mappings
     ports: <list of strings>          # Optional: Port mappings
+    environment: <object>             # Optional: Custom environment variables
     preinstall: <list of strings>     # Optional: Commands before build
     postinstall: <list of strings>    # Optional: Commands after build
     runs_on: <string>                 # Optional: Target host name
@@ -253,6 +254,18 @@ devices:
 ports:
   - "8080:8080"
   - "1234:1234/udp"
+```
+
+#### `environment`
+**Type:** `object (key-value pairs)`
+**Description:** Custom environment variables to set in the container
+**Note:** ROS_DOMAIN_ID, ROS_DISTRO, and ROS_DISCOVERY_SERVER are set automatically
+**Example:**
+```yaml
+environment:
+  MY_CUSTOM_VAR: "value"
+  SENSOR_RATE_HZ: "50"
+  DEBUG_MODE: "true"
 ```
 
 #### `preinstall`
@@ -430,6 +443,9 @@ components:
     entrypoint: ros2 launch robot_control control.launch.py
     devices:
       - "/dev/ttyACM0:/dev/ttyACM0"
+    environment:
+      CONTROL_RATE_HZ: "100"
+      SERVO_PORT: "/dev/ttyACM0"
     preinstall:
       - "pip install pyserial"
 

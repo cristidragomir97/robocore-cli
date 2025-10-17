@@ -5,93 +5,73 @@ import yaml
 from collections import defaultdict
 from typing import List, Optional
 
+from colorama import Fore
 from core.config   import Config
 from core.renderer import TemplateRenderer
 from core.docker   import DockerHelper
 from core.models   import Component, Host
+from python_on_whales.exceptions import DockerException
 
-def setup_managed_workspace(comp: Component, cfg: Config) -> str:
-    """Create managed workspace and symlink sources"""
-    workspace_dir = os.path.join(cfg.root, comp.managed_workspace)
-    src_dir = os.path.join(workspace_dir, "src")
-
-    # Create workspace directories
-    os.makedirs(src_dir, exist_ok=True)
-
-    # Clean existing symlinks
-    for item in os.listdir(src_dir):
-        item_path = os.path.join(src_dir, item)
-        if os.path.islink(item_path):
-            os.unlink(item_path)
-
-    # Link source packages
+def resolve_source_packages(comp: Component, cfg: Config) -> List[tuple]:
+    """
+    Resolve source paths into a list of (relative_path, package_name) tuples.
+    These paths are relative to cfg.root and will be used directly in Docker COPY commands.
+    """
+    packages = []
     source_paths = comp.get_source_paths()
-    has_sources = False
 
     for source_path in source_paths:
         abs_source = os.path.join(cfg.root, source_path)
-        if os.path.exists(abs_source):
-            if os.path.isdir(abs_source):
-                # Check if this is a ROS package or workspace src directory
-                if os.path.exists(os.path.join(abs_source, "package.xml")):
-                    # It's a ROS package, link it directly
-                    package_name = os.path.basename(abs_source)
-                    link_target = os.path.join(src_dir, package_name)
-                    if os.path.exists(link_target):
-                        os.unlink(link_target)
-                    os.symlink(abs_source, link_target)
-                    print(f"  - linked package: {source_path} -> {comp.name}/src/{package_name}")
-                    has_sources = True
-                elif os.path.exists(os.path.join(abs_source, "src")):
-                    # It's a workspace src directory, link all packages within it
-                    src_contents = os.path.join(abs_source, "src")
-                    if os.path.exists(src_contents):
-                        for pkg in os.listdir(src_contents):
-                            pkg_path = os.path.join(src_contents, pkg)
-                            if os.path.isdir(pkg_path) and os.path.exists(os.path.join(pkg_path, "package.xml")):
-                                link_target = os.path.join(src_dir, pkg)
-                                if os.path.exists(link_target):
-                                    os.unlink(link_target)
-                                os.symlink(pkg_path, link_target)
-                                print(f"  - linked package: {source_path}/src/{pkg} -> {comp.name}/src/{pkg}")
-                                has_sources = True
-                else:
-                    print(f"  - WARNING: {source_path} doesn't appear to be a ROS package or workspace")
-            else:
-                print(f"  - WARNING: Source path {source_path} is not a directory")
-        else:
+        if not os.path.exists(abs_source):
             print(f"  - WARNING: Source path {source_path} does not exist")
+            continue
 
-    return workspace_dir if has_sources else ""
+        if not os.path.isdir(abs_source):
+            print(f"  - WARNING: Source path {source_path} is not a directory")
+            continue
+
+        # Check if this is a ROS package
+        if os.path.exists(os.path.join(abs_source, "package.xml")):
+            package_name = os.path.basename(abs_source)
+            packages.append((source_path, package_name))
+            print(f"  - found package: {source_path} -> {package_name}")
+        # Check if this is a workspace src directory containing packages
+        elif os.path.exists(os.path.join(abs_source, "src")):
+            src_contents = os.path.join(abs_source, "src")
+            for pkg in os.listdir(src_contents):
+                pkg_path = os.path.join(src_contents, pkg)
+                if os.path.isdir(pkg_path) and os.path.exists(os.path.join(pkg_path, "package.xml")):
+                    rel_pkg_path = os.path.join(source_path, "src", pkg)
+                    packages.append((rel_pkg_path, pkg))
+                    print(f"  - found package: {rel_pkg_path} -> {pkg}")
+        else:
+            print(f"  - WARNING: {source_path} doesn't appear to be a ROS package or workspace")
+
+    return packages
 
 def detect_component_features(comp: Component, cfg: Config) -> dict:
     has_common = bool(cfg.common_packages)
     has_repos  = bool(comp.repositories)
     has_apt    = bool(comp.apt_packages)
 
-    # Set up managed workspace and detect local sources
-    workspace_dir = setup_managed_workspace(comp, cfg)
-    has_local = bool(workspace_dir)
-
-    # For legacy components using folder field
-    if comp.folder and not workspace_dir:
-        src_path = os.path.join(comp.folder, cfg.workspace_dir, "src")
-        has_local = os.path.isdir(src_path)
+    # Resolve source packages (no copying, just detection)
+    source_packages = resolve_source_packages(comp, cfg)
+    has_local = bool(source_packages)
 
     print(f"[stage] Component '{comp.name}' features:")
     print(f"  - common_ws_exists: {has_common}")
     print(f"  - has_repos:        {has_repos}")
     print(f"  - comp_src_exists:  {has_local}")
     print(f"  - apt_exists:       {has_apt}")
-    if workspace_dir:
-        print(f"  - managed_workspace: {workspace_dir}")
+    if source_packages:
+        print(f"  - source_packages:  {len(source_packages)} packages")
 
     return {
         "common_ws_exists": has_common,
         "has_repos":        has_repos,
         "comp_src_exists":  has_local,
         "apt_exists":       has_apt,
-        "workspace_dir":    workspace_dir
+        "source_packages":  source_packages
     }
 
 def get_host(hosts_map: dict, comp: Component, cfg: Config) -> Host:
@@ -111,22 +91,74 @@ def build_component_image(comp: Component,
                           participant_id: int) -> dict:
 
     host = get_host(hosts_map, comp, cfg)
+    img_tag = comp.image_tag(cfg)
+    platform = f"linux/{host.arch}"
+
+    # Handle external pre-built images
+    if comp.image:
+        print(f"[stage] Using external image '{comp.name}' → {img_tag}")
+        # No build needed, just use the external image
+        return {
+            "name": comp.name,
+            "image": img_tag,
+            "devices": comp.devices,
+            "ports": comp.ports,
+            "environment": comp.environment,
+            "entrypoint": comp.entrypoint,
+            "launch_args": comp.launch_args,
+            "has_repos": False,
+            "comp_src": False,
+            "shm_size": comp.shm_size,
+            "ipc_mode": comp.ipc_mode,
+            "cpuset": comp.cpuset,
+            "mount_shm": comp.mount_shm,
+            "rt_enabled": comp.rt_enabled,
+        }
+
+    # Handle custom Dockerfile builds
+    if comp.build:
+        build_context = os.path.join(cfg.root, comp.build)
+        dockerfile = os.path.join(build_context, "Dockerfile")
+
+        if not os.path.exists(dockerfile):
+            sys.exit(f"[stage] ERROR: Dockerfile not found at {dockerfile}")
+
+        print(f"[stage] Building '{comp.name}' from custom Dockerfile → {img_tag} for [{platform}]")
+
+        docker.build_multiarch(
+            image_tag=img_tag,
+            context=build_context,
+            dockerfile=dockerfile,
+            platforms=[platform],
+            push=True
+        )
+
+        return {
+            "name": comp.name,
+            "image": img_tag,
+            "devices": comp.devices,
+            "ports": comp.ports,
+            "environment": comp.environment,
+            "entrypoint": comp.entrypoint,
+            "launch_args": comp.launch_args,
+            "has_repos": False,
+            "comp_src": False,
+            "shm_size": comp.shm_size,
+            "ipc_mode": comp.ipc_mode,
+            "cpuset": comp.cpuset,
+            "mount_shm": comp.mount_shm,
+            "rt_enabled": comp.rt_enabled,
+        }
+
+    # Robocore-managed build (current logic)
     feats = detect_component_features(comp, cfg)
 
-    # Determine working directory for files (Dockerfile, repos.yaml, etc.)
-    if feats["workspace_dir"]:
-        # Use managed workspace
-        comp_dir = os.path.abspath(feats["workspace_dir"])
-    elif comp.folder:
-        # Legacy support
-        comp_dir = os.path.abspath(comp.folder)
-    else:
-        # Create minimal workspace for repos-only components
-        comp_dir = os.path.join(cfg.root, ".robocore", "workspaces", comp.name)
-        os.makedirs(comp_dir, exist_ok=True)
+    # Working directory for generated files (Dockerfile, repos.yaml, superclient.xml)
+    comp_dir = os.path.join(cfg.root, ".robocore", "workspaces", comp.name)
+    os.makedirs(comp_dir, exist_ok=True)
 
     # Find DDS manager host (default to first host if none specified)
-    dds_manager = next((h for h in cfg.hosts if getattr(h, "manager", False)), None)
+    dds_manager = next((h for h in cfg.hosts if h.manager), None)
     if not dds_manager:
         if len(cfg.hosts) > 0:
             dds_manager = cfg.hosts[0]
@@ -144,27 +176,15 @@ def build_component_image(comp: Component,
         with open(repos_file, "w") as f:
             yaml.safe_dump({"repositories": repo_map}, f, default_flow_style=False, sort_keys=False)
 
-    # Determine source paths for Docker build
-    if feats["comp_src_exists"]:
-        if feats["workspace_dir"]:
-            # Use managed workspace src directory
-            comp_src_rel = os.path.relpath(os.path.join(comp_dir, "src"), cfg.root)
-        else:
-            # Legacy path
-            comp_src_rel = os.path.relpath(os.path.join(comp_dir, cfg.workspace_dir, "src"), cfg.root)
-    else:
-        comp_src_rel = ""
-
     repos_file_rel = os.path.relpath(repos_file, cfg.root) if feats["has_repos"] else ""
     superclient_path = os.path.join(comp_dir, "superclient.xml")
     superclient_rel = os.path.relpath(superclient_path, cfg.root)
 
     renderer.render_superclient(
         out_path=superclient_path,
-        component_name=comp.name,
         participantID=participant_id,
-        this_host_ip=host.ip,
-        dds_server_host_ip=dds_manager.ip
+        this_host_ip=host.effective_dds_ip,
+        dds_server_host_ip=dds_manager.effective_dds_ip
     )
 
     dockerfile_path = os.path.join(comp_dir, "Dockerfile")
@@ -174,7 +194,7 @@ def build_component_image(comp: Component,
         ros_distro=cfg.ros_distro,
         ros_domain_id=cfg.ros_domain_id,
         comp=comp,
-        comp_src=comp_src_rel,
+        source_packages=feats["source_packages"],
         repos_file=repos_file_rel,
         superclient_path=superclient_rel,
         apt_packages=comp.apt_packages or [],
@@ -183,7 +203,7 @@ def build_component_image(comp: Component,
         has_repos=feats["has_repos"],
         comp_src_exists=feats["comp_src_exists"],
         enable_apt_caching=cfg.enable_apt_caching,
-        dds_server_ip=dds_manager.ip
+        dds_server_ip=dds_manager.effective_dds_ip
     )
 
     if not os.path.isfile(dockerfile_path):
@@ -207,15 +227,22 @@ def build_component_image(comp: Component,
         "image": img_tag,
         "devices": comp.devices,
         "ports": comp.ports,
+        "environment": comp.environment,
         "entrypoint": comp.entrypoint,
         "launch_args": comp.launch_args,
         "has_repos": feats["has_repos"],
-        "comp_src": feats["comp_src_exists"]
+        "comp_src": feats["comp_src_exists"],
+        "shm_size": comp.shm_size,
+        "ipc_mode": comp.ipc_mode,
+        "cpuset": comp.cpuset,
+        "mount_shm": comp.mount_shm,
+        "rt_enabled": comp.rt_enabled,
     }
 
 def stage_main(project_root: str,
                component: Optional[str] = None,
-               refresh: bool = False):
+               refresh: bool = False,
+               force_base: bool = False):
     project_root = os.path.abspath(project_root)
     os.chdir(project_root)
 
@@ -237,7 +264,7 @@ def stage_main(project_root: str,
 
     # Build base image once for all platforms
     from commands.prepare_base import prepare_base_main
-    prepare_base_main(project_root)
+    prepare_base_main(project_root, force=force_base)
     base_tag = cfg.base_image
 
     staged_by_host = {}
@@ -252,16 +279,28 @@ def stage_main(project_root: str,
                 comp, cfg, hosts_map, base_tag, renderer, docker,
                 participant_id=participant_id
             )
-            docker.pull_image_on_host(host, base_tag)
+            try:
+                docker.pull_image_on_host(host, base_tag)
+            except DockerException:
+                print(Fore.RED + f"[stage] Failed to pull base image on host '{host.name}' ({host.ip})", file=sys.stderr)
+                raise
             staged.append(entry)
 
         staged_by_host[host_name] = staged
 
+    # Find DDS manager host for compose files
+    dds_manager = next((h for h in cfg.hosts if h.manager), None)
+    if not dds_manager and len(cfg.hosts) > 0:
+        dds_manager = cfg.hosts[0]
+
     # Write one docker-compose.<host>.yaml per host
     for host_name, staged_comps in staged_by_host.items():
+        host = hosts_map[host_name]
         compose_name = f"docker-compose.{host_name}.yaml"
         out_path = os.path.join(".", compose_name)
-        renderer.render_compose(out_path, staged_comps, cfg)
+        # Only include dds_server section in the manager host's compose file
+        host_dds_manager = dds_manager if host.manager else None
+        renderer.render_compose(out_path, staged_comps, cfg, host=host, dds_manager=host_dds_manager)
         print(f"[stage] Wrote '{compose_name}'")
 
 if __name__ == "__main__":
@@ -270,5 +309,6 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--project-root", default=".", help="Path to project root")
     parser.add_argument("-c", "--component", default=None, help="Component to restage")
     parser.add_argument("--refresh", action="store_true", help="Only regenerate docker-compose.yml")
+    parser.add_argument("--force-base", action="store_true", help="Force rebuild of base image")
     args = parser.parse_args()
-    stage_main(args.project_root, args.component, args.refresh)
+    stage_main(args.project_root, args.component, args.refresh, args.force_base)

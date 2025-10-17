@@ -18,9 +18,14 @@ services:
     image: {{ comp.image }}
     network_mode: host
 
-    {% if comp.comp_src %}
+    {% if comp.comp_src or comp.mount_shm %}
     volumes:
+      {% if comp.comp_src %}
       - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:rw"
+      {% endif %}
+      {% if comp.mount_shm %}
+      - "/dev/shm:/dev/shm:rw"
+      {% endif %}
     {% endif %}
 
     {% if comp.devices %}
@@ -28,10 +33,30 @@ services:
         {% for dev in comp.devices %}
         - "{{ dev }}"
         {% endfor %}
+    {% endif %}
+
+    {% if comp.devices or comp.rt_enabled %}
     cap_add:
+      {% if comp.devices %}
         - SYS_RAWIO
         - NET_ADMIN
-  {% endif %}
+      {% endif %}
+      {% if comp.rt_enabled %}
+        - IPC_LOCK
+        - SYS_NICE
+      {% endif %}
+    {% endif %}
+
+    {% if comp.rt_enabled %}
+    security_opt:
+        - seccomp:unconfined
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      rtprio: 99
+      nice: -20
+    {% endif %}
 
     {% if comp.ports %}
     ports:
@@ -44,6 +69,21 @@ services:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
       - ROS_DISCOVERY_SERVER={{ discovery_server }}
+      {% for key, value in comp.environment.items() %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+
+    {% if comp.shm_size %}
+    shm_size: {{ comp.shm_size }}
+    {% endif %}
+
+    {% if comp.ipc_mode %}
+    ipc: {{ comp.ipc_mode }}
+    {% endif %}
+
+    {% if comp.cpuset %}
+    cpuset: "{{ comp.cpuset }}"
+    {% endif %}
 
     {% if comp.entrypoint %}
     command: >
@@ -87,14 +127,14 @@ services:
 
 {% if dds_manager %}
   dds_server:
-    image: {{ cfg.registry }}/robocore-{{ cfg.ros_distro }}
+    image: {{ base_image }}
     container_name: dds_server
     network_mode: host
     environment:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     command: >
       bash -lc "
-        source /opt/ros/{{ cfg.ros_distro }}/setup.bash &&
-        fastdds discovery -i 0 -l {{ dds_manager.ip }} -p 11811
+        source /opt/ros/{{ ros_distro }}/setup.bash &&
+        fastdds discovery -i 0 -l {{ dds_manager.effective_dds_ip }} -p 11811
       "
 {% endif %}

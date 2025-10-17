@@ -3,16 +3,45 @@ import os
 import sys
 import shutil
 import yaml
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from python_on_whales import DockerClient
 from core.config   import Config
 from core.models   import Component, Host
 
+def resolve_source_packages(comp: Component, cfg: Config) -> List[Tuple[str, str]]:
+    """
+    Resolve source paths into a list of (absolute_path, package_name) tuples.
+    """
+    packages = []
+    source_paths = comp.get_source_paths()
+
+    for source_path in source_paths:
+        abs_source = os.path.join(cfg.root, source_path)
+        if not os.path.exists(abs_source):
+            continue
+
+        if not os.path.isdir(abs_source):
+            continue
+
+        # Check if this is a ROS package
+        if os.path.exists(os.path.join(abs_source, "package.xml")):
+            package_name = os.path.basename(abs_source)
+            packages.append((abs_source, package_name))
+        # Check if this is a workspace src directory containing packages
+        elif os.path.exists(os.path.join(abs_source, "src")):
+            src_contents = os.path.join(abs_source, "src")
+            for pkg in os.listdir(src_contents):
+                pkg_path = os.path.join(src_contents, pkg)
+                if os.path.isdir(pkg_path) and os.path.exists(os.path.join(pkg_path, "package.xml")):
+                    packages.append((pkg_path, pkg))
+
+    return packages
+
 def build_main(project_root: str, component: Optional[str] = None):
     """
-    For each component that has a local ros_ws/src folder:
-      1) Copy src → build/<comp>/ros_ws/src
+    For each component that has local source packages:
+      1) Copy sources → build/<comp>/ros_ws/src
       2) Run any postinstall hooks
       3) Invoke the builder image (already staged) to colcon build → install
     """
@@ -35,32 +64,29 @@ def build_main(project_root: str, component: Optional[str] = None):
     for comp in comps:
         comp_name = comp.name
 
-        # Determine source directory (new managed workspace or legacy)
-        if comp.folder:
-            # Legacy support
-            comp_dir = os.path.abspath(comp.folder)
-            src_dir = os.path.join(comp_dir, cfg.workspace_dir, 'src')
-        else:
-            # Use managed workspace
-            managed_workspace = os.path.join(project_root, comp.managed_workspace)
-            src_dir = os.path.join(managed_workspace, 'src')
+        # Resolve source packages
+        source_packages = resolve_source_packages(comp, cfg)
 
         # only build if there's local source
-        if not os.path.exists(src_dir) or not os.listdir(src_dir):
+        if not source_packages:
             print(f"[build] Skipping '{comp_name}' (no source packages found)")
             continue
 
         # prepare a clean workspace
         ws_root = os.path.join(build_root, comp_name, cfg.workspace_dir)
+        ws_src = os.path.join(ws_root, 'src')
 
         # copy in your sources
-        print(f"[build] Copying source for '{comp_name}' → {ws_root}/src")
-        if os.path.exists(os.path.join(ws_root, 'src')):
-            shutil.rmtree(os.path.join(ws_root, 'src'))
+        print(f"[build] Copying {len(source_packages)} packages for '{comp_name}' → {ws_src}")
+        if os.path.exists(ws_src):
+            shutil.rmtree(ws_src)
+        os.makedirs(ws_src, exist_ok=True)
 
-        # Handle symlinks properly - copy the actual content, not the symlinks
-        shutil.copytree(src_dir, os.path.join(ws_root, 'src'),
-                       dirs_exist_ok=True, symlinks=False, copy_function=shutil.copy2)
+        # Copy each package
+        for abs_source, pkg_name in source_packages:
+            dest = os.path.join(ws_src, pkg_name)
+            print(f"  - copying {pkg_name}")
+            shutil.copytree(abs_source, dest, symlinks=False)
 
         # load any post-install hooks
         # (your Component model should expose postinstall as a List[str])

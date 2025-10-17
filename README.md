@@ -109,10 +109,16 @@ These are included in the base image so they don't get duplicated per component�
 
 ### 4. Components – Modular, Swappable Units
 
+Robocore-cli supports three ways to define components:
+
+#### a. Robocore-Managed Build (Default)
+
+robocore-cli generates a Dockerfile and manages the build process:
+
 ```yaml
 components:
   - name: micro_ros_agent
-    folder: components/micro_ros_agent
+    source: components/micro_ros_agent/ros_ws/src
     runs_on: rpi5
     apt_packages: []
     repositories:
@@ -128,21 +134,57 @@ components:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
 ```
 
-- **name**: The unique identifier for this component 
-- **folder**: Where its ROS 2 workspace lives 
+- **name**: The unique identifier for this component
+- **source/sources**: Local source paths for ROS packages
 - **runs_on**: Which host this component deploys to
 - **entrypoint**: What command runs at container start **(optional)**
 - **devices**: Which devices to expose (e.g., /dev/ttyUSB0) **(optional)**
 - **apt_packages**: List of apt packages you want to install **(optional)**
 - **repositories**: Define dependencies declaratively using the standard vcstool format **(optional)**
-- **postinstall**: Commands to run after installing dependencies. **(optional)**
+- **postinstall**: Commands to run after installing dependencies **(optional)**
 
+#### b. External Pre-Built Image
 
-You can mix and match different types of package sources within a container; however, we do not recommend combining VCS-based packages with apt-based packages in the same component, as this can lead to confusion and maintenance issues down the line.
+Use existing Docker images from registries without any build:
 
-For components that use only apt packages or VCS repositories, compilation will occur during the stage step. If a component includes a local workspace, it will be built during the build step.
+```yaml
+components:
+  - name: rosboard
+    image: thehale/rosboard:latest
+    runs_on: rpi5
+    ports:
+      - "8888:8888"
+    entrypoint: rosboard
+```
 
-Additionally, a component can be based on a pre-packaged ROS image. In this case, the folder, apt_packages, and repositories fields should not be used—if any of these are specified alongside a base image, it will result in an error.
+- **image**: Full Docker image reference (registry/name:tag)
+- Cannot be combined with `repositories`, `apt_packages`, or `pip_packages`
+
+#### c. Custom Dockerfile Build
+
+Build from your own Dockerfile for full control (GPU drivers, complex builds, etc.):
+
+```yaml
+components:
+  - name: camera_driver
+    build: docker/camera
+    runs_on: orin
+    devices:
+      - "/dev/video0:/dev/video0"
+    entrypoint: ros2 launch camera driver.launch.py
+```
+
+- **build**: Path to directory containing your Dockerfile (relative to project root)
+- Cannot be combined with `repositories`, `apt_packages`, or `pip_packages`
+
+See [docs/external-images.md](docs/external-images.md) for detailed examples and migration guides.
+
+---
+
+**Component Build Behavior**:
+- For **robocore-managed** builds: compilation occurs during the `build` step
+- For **external images**: no build step, image used as-is
+- For **custom Dockerfiles**: build happens during `stage` step
 
 ---
 
@@ -170,13 +212,17 @@ Additionally, a component can be based on a pre-packaged ROS image. In this case
 
 **Description**: The stage step is where each component's container image is prepared with all its required dependencies, but without compiling or adding the actual application code yet. During this step, for every package:
 
-* The base image (e.g., a minimal ROS image) is pulled.
+* The base image is checked for changes and rebuilt only if needed (using hash-based caching).
 * Any system dependencies (like via apt) and ROS packages from remote repositories (defined via VCS, e.g., Git) are installed into the container.
-* The container ends up with a fully configured environment, ready for building the component’s code in a consistent, reproducible way.
-* The `docker-compose.yaml` files for each host get updated with the new containers and their settings. 
+* The container ends up with a fully configured environment, ready for building the component's code in a consistent, reproducible way.
+* The `docker-compose.yaml` files for each host get updated with the new containers and their settings.
+
+For components using `image` or `build` fields, the stage step handles their Docker builds or skips building entirely for external images.
 
 **Flags**
 - `--refresh`: Just refreshes the `docker-compose.yaml` files, skipping any build step
+- `--force-base`: Force rebuild of the base image even if cached (useful after manual changes)
+- `-c, --component <name>`: Stage only the specified component
 ---
 
 ### build

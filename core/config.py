@@ -1,7 +1,10 @@
 # core/config.py
 import os
 import yaml
+from colorama import Fore
 from .models import Host, Component, CommonPackage
+from .validation import ConfigValidator, RobocoreConfig
+from .exceptions import ConfigurationError, SourceNotFoundError, ValidationError
 
 class Config:
     def __init__(self, data, root):
@@ -48,10 +51,44 @@ class Config:
         self.hosts = [Host(**h) for h in raw_hosts]
 
     @classmethod
-    def load(cls, project_root: str):
+    def load(cls, project_root: str, validate: bool = True):
+        """
+        Load and optionally validate configuration.
+
+        Args:
+            project_root: Path to project directory
+            validate: Run Pydantic validation (default: True)
+
+        Returns:
+            Config instance
+
+        Raises:
+            FileNotFoundError: If config.yaml doesn't exist
+            ConfigurationError: If validation fails
+        """
         path = os.path.join(project_root, 'config.yaml')
+
+        # Run validation if requested
+        if validate:
+            validator = ConfigValidator(project_root)
+            try:
+                validated_config, warnings = validator.validate_all(path)
+
+                # Print warnings
+                for warning in warnings:
+                    print(Fore.YELLOW + f"[WARNING] {warning}")
+
+            except (ConfigurationError, SourceNotFoundError, ValidationError, FileNotFoundError):
+                # Re-raise validation errors with their context intact
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ConfigurationError(f"Unexpected validation error: {e}")
+
+        # Load YAML (even if validation ran, we still need to load for backward compatibility)
         if not os.path.isfile(path):
             raise FileNotFoundError(f"config.yaml not found in {project_root}")
+
         data = yaml.safe_load(open(path)) or {}
         return cls(data, project_root)
 

@@ -2,10 +2,12 @@
 import os
 import sys
 import signal
+from colorama import Fore
 from core.config import Config
 from core.docker import DockerHelper
 from core.sync   import SyncManager
 from core.models import Host
+from python_on_whales.exceptions import DockerException
 
 def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
     cfg    = Config.load(project_root)
@@ -27,14 +29,21 @@ def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
             print(f"[deploy:{host.name}] WARNING: Compose file '{compose_filename}' not found, skipping.")
             continue
 
-        sync.rsync_builds(project_root, host, cfg.components)
+        # Filter components for this host
+        host_components = [c for c in cfg.components if c.runs_on == host.name]
+
+        # Only sync builds for components that run on this host
+        sync.rsync_builds(project_root, host, host_components)
 
         # Pull component images on host
-        host_components = [c for c in cfg.components if c.runs_on == host.name]
         for comp in host_components:
             image = comp.image_tag(cfg)
             print(f"[deploy:{host.name}] Pulling {image}...")
-            docker.pull_image_on_host(host, image)
+            try:
+                docker.pull_image_on_host(host, image)
+            except DockerException:
+                print(Fore.RED + f"[deploy:{host.name}] Failed to pull image on host '{host.name}' ({host.ip})", file=sys.stderr)
+                raise
 
         print(f"[deploy:{host.name}] Synced builds & compose. Launching containers...")
         try:

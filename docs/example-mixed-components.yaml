@@ -1,0 +1,168 @@
+# Example configuration demonstrating all three component types
+# This shows how robocore-managed builds, external images, and custom Dockerfiles
+# can coexist in a single robot system.
+
+ros_distro: humble
+ros_domain_id: 0
+registry: docker.io/myuser
+image_prefix: myrobot
+tag: latest
+
+hosts:
+  - name: workstation
+    ip: localhost
+    user: dev
+    arch: amd64
+
+  - name: robot
+    ip: robot.local
+    user: ubuntu
+    arch: arm64
+    manager: true
+
+  - name: edge
+    ip: edge.local
+    user: nvidia
+    arch: arm64
+
+common_packages:
+  # Shared messages package
+  - name: my_msgs
+    repositories:
+      - url: https://github.com/myuser/my_msgs.git
+        version: main
+
+components:
+  # ========================================
+  # 1. ROBOCORE-MANAGED BUILD
+  # robocore-cli generates Dockerfile and manages dependencies
+  # ========================================
+  - name: navigation
+    source: ros/src/nav_stack
+    repositories:
+      - url: https://github.com/ros-planning/navigation2.git
+        version: humble
+    apt_packages:
+      - ros-humble-slam-toolbox
+      - ros-humble-costmap-2d
+    runs_on: robot
+    entrypoint: ros2 launch nav_stack nav.launch.py
+    environment:
+      NAV_PARAMS: /config/nav2_params.yaml
+    optimisations:
+      - shm: "512m"
+      - ipc: "host"
+
+  # ========================================
+  # 2. EXTERNAL PRE-BUILT IMAGE
+  # Use community image without any build
+  # ========================================
+  - name: rosboard
+    image: thehale/rosboard:latest
+    runs_on: workstation
+    ports:
+      - "8888:8888"
+    entrypoint: rosboard
+    environment:
+      ROSBOARD_PORT: "8888"
+
+  - name: rviz
+    image: osrf/ros:humble-desktop-full
+    runs_on: workstation
+    entrypoint: rviz2
+    environment:
+      DISPLAY: ":0"
+      QT_X11_NO_MITSHM: "1"
+
+  - name: foxglove_bridge
+    image: ghcr.io/foxglove/ros-foxglove-bridge:latest
+    runs_on: robot
+    ports:
+      - "8765:8765"
+
+  # ========================================
+  # 3. CUSTOM DOCKERFILE BUILD
+  # Full control over build process
+  # ========================================
+  - name: camera_gpu
+    build: docker/camera_gpu
+    runs_on: edge
+    devices:
+      - /dev/video0:/dev/video0
+    entrypoint: ros2 launch camera_gpu detect.launch.py
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+    optimisations:
+      - shm: "2g"
+      - ipc: "host"
+
+  - name: yolo_detector
+    build: docker/yolo
+    runs_on: edge
+    entrypoint: ros2 launch yolo_detector detect.launch.py
+    environment:
+      MODEL_PATH: /models/yolov8n.pt
+      CONFIDENCE_THRESHOLD: "0.5"
+    optimisations:
+      - shm: "1g"
+
+  # ========================================
+  # MIXING DIFFERENT TYPES
+  # Motion control uses robocore-managed build
+  # with local source + repositories
+  # ========================================
+  - name: motion_control
+    sources:
+      - ros/src/motion_controller
+      - ros/src/motor_drivers
+      - ros/src/kinematics
+    repositories:
+      - url: https://github.com/ros-controls/ros2_control.git
+        version: humble
+    apt_packages:
+      - ros-humble-controller-manager
+      - ros-humble-joint-state-broadcaster
+    pip_packages:
+      - numpy
+      - scipy
+    runs_on: robot
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    entrypoint: ros2 launch motion_controller motion.launch.py
+    launch_args: servo_port:=/dev/ttyACM0
+    optimisations:
+      - pinned_cores: [0, 1]
+      - rt: true
+      - mount_shm: true
+
+  # ========================================
+  # EXAMPLE: Custom build for hardware drivers
+  # ========================================
+  - name: lidar_driver
+    build: docker/lidar
+    runs_on: robot
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    entrypoint: ros2 launch lidar_driver rplidar.launch.py
+
+# Expected directory structure:
+#
+# project_root/
+#   ├── robot.yaml (this file)
+#   ├── ros/
+#   │   └── src/
+#   │       ├── nav_stack/
+#   │       ├── motion_controller/
+#   │       ├── motor_drivers/
+#   │       └── kinematics/
+#   └── docker/
+#       ├── camera_gpu/
+#       │   ├── Dockerfile
+#       │   └── camera_gpu/ (ROS package)
+#       ├── yolo/
+#       │   ├── Dockerfile
+#       │   ├── yolo_detector/ (ROS package)
+#       │   └── models/
+#       └── lidar/
+#           ├── Dockerfile
+#           └── lidar_driver/ (ROS package)
