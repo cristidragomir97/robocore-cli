@@ -72,6 +72,7 @@ def prepare_base_main(project_root: str, force: bool = False):
 
     # Map ROS distro to Ubuntu release
     ubuntu_map = {
+        "jazzy": "noble",
         "humble": "jammy",
         "galactic": "jammy",
         "foxy": "focal"

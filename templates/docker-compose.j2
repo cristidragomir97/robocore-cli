@@ -1,6 +1,5 @@
 version: '3.8'
 services:
-
 {% if enable_dds_router %}
   dds_router:
     image: dragomirxyz/fastdds_server:latest
@@ -11,13 +10,16 @@ services:
       - ROS_DOMAIN_ID=0
       - ROS_DISCOVERY_SERVER={{ discovery_server }}
 {% endif %}
-
-
 {% for comp in components %}
   {{ comp.name }}:
     image: {{ comp.image }}
     network_mode: host
-
+    {% if comp.privileged %}
+    privileged: true
+    {% endif %}
+    {% if comp.runtime %}
+    runtime: {{ comp.runtime }}
+    {% endif %}
     {% if comp.comp_src or comp.mount_shm %}
     volumes:
       {% if comp.comp_src %}
@@ -27,14 +29,12 @@ services:
       - "/dev/shm:/dev/shm:rw"
       {% endif %}
     {% endif %}
-
     {% if comp.devices %}
     devices:
         {% for dev in comp.devices %}
         - "{{ dev }}"
         {% endfor %}
     {% endif %}
-
     {% if comp.devices or comp.rt_enabled %}
     cap_add:
       {% if comp.devices %}
@@ -46,7 +46,6 @@ services:
         - SYS_NICE
       {% endif %}
     {% endif %}
-
     {% if comp.rt_enabled %}
     security_opt:
         - seccomp:unconfined
@@ -57,14 +56,12 @@ services:
       rtprio: 99
       nice: -20
     {% endif %}
-
     {% if comp.ports %}
     ports:
       {% for port in comp.ports %}
       - "{{ port }}"
         {% endfor %}
     {% endif %}
-
     environment:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
@@ -72,19 +69,30 @@ services:
       {% for key, value in comp.environment.items() %}
       - {{ key }}={{ value }}
       {% endfor %}
-
     {% if comp.shm_size %}
     shm_size: {{ comp.shm_size }}
     {% endif %}
-
     {% if comp.ipc_mode %}
     ipc: {{ comp.ipc_mode }}
     {% endif %}
-
     {% if comp.cpuset %}
     cpuset: "{{ comp.cpuset }}"
     {% endif %}
-
+    {% if comp.gpu_count or comp.gpu_device_ids %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              {% if comp.gpu_count %}
+              count: {{ comp.gpu_count }}
+              {% elif comp.gpu_device_ids %}
+              device_ids: [{{ comp.gpu_device_ids|join(', ') }}]
+              {% else %}
+              count: all
+              {% endif %}
+              capabilities: [gpu]
+    {% endif %}
     {% if comp.entrypoint %}
     command: >
       bash -lc "\
@@ -123,8 +131,6 @@ services:
       "
     {% endif %}
 {% endfor %}
-
-
 {% if dds_manager %}
   dds_server:
     image: {{ base_image }}

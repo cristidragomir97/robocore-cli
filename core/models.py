@@ -109,6 +109,12 @@ class Component:
     mount_shm: bool = False            # Mount /dev/shm from host
     rt_enabled: bool = False           # Enable real-time kernel capabilities
 
+    # Docker runtime options
+    privileged: bool = False           # Run container in privileged mode
+    runtime: Optional[str] = None      # Container runtime (e.g., "nvidia")
+    gpu_count: Optional[int] = None    # Number of GPUs (for nvidia runtime)
+    gpu_device_ids: List[str] = field(default_factory=list)  # Specific GPU IDs (e.g., ["0", "1"])
+
     @classmethod
     def from_dict(cls, d, is_common=False, workspace_dir="ros_ws"):
         repos = [RepositorySpec.from_dict(r) for r in d.get('repositories', [])]
@@ -157,6 +163,14 @@ class Component:
                 elif 'rt' in opt:
                     rt_enabled = opt['rt']
 
+        # Parse docker runtime options
+        privileged = d.get('privileged', False)
+        runtime = d.get('runtime')
+        gpu_count = d.get('gpu_count')
+        gpu_device_ids = d.get('gpu_device_ids', [])
+        if isinstance(gpu_device_ids, str):
+            gpu_device_ids = [gpu_device_ids]  # Convert single string to list
+
         return cls(
             name        = d['name'],
             sources     = sources,
@@ -182,6 +196,10 @@ class Component:
             cpuset      = cpuset,
             mount_shm   = mount_shm,
             rt_enabled  = rt_enabled,
+            privileged  = privileged,
+            runtime     = runtime,
+            gpu_count   = gpu_count,
+            gpu_device_ids = gpu_device_ids,
         )
 
     @property

@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 
 # 1b) Install any component-specific pip packages
 {% if pip_packages %}
-RUN pip3 install --no-cache-dir {{ pip_packages | join(' ') }}
+RUN pip3 install --no-cache-dir {% if ros_distro == 'jazzy' %}--break-system-packages {% endif %} {{ pip_packages | join(' ') }}
 {% endif %}
 
 # 2) VCS repos → build into /vcs_ws/install

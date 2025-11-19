@@ -14,6 +14,7 @@ from commands.prepare_base import prepare_base_main
 from commands.viz import viz_main
 from commands.clean import clean_main
 from commands.validate import validate_main
+from commands.stack import stack_main
 from core.exceptions import RobocoreError, ConfigurationError, ValidationError
 from python_on_whales.exceptions import DockerException
 import subprocess
@@ -106,6 +107,26 @@ def create_parser():
     # validate
     pval = sp.add_parser('validate', help='Validate configuration without executing operations')
     pval.set_defaults(func=lambda args: sys.exit(validate_main(project_root=args.project_root)))
+
+    # stack
+    pstack = sp.add_parser('stack', help='Activate robostack environment with DDS configuration')
+    pstack.add_argument('-e', '--env', default='ros_env',
+                        help='Name of the robostack environment (default: ros_env)')
+
+    # Package manager selection (mutually exclusive)
+    pm_group = pstack.add_mutually_exclusive_group()
+    pm_group.add_argument('--pixi', action='store_const', const='pixi', dest='package_manager',
+                          help='Use pixi package manager')
+    pm_group.add_argument('--mamba', action='store_const', const='mamba', dest='package_manager',
+                          help='Use mamba package manager')
+    pm_group.add_argument('--micromamba', action='store_const', const='micromamba', dest='package_manager',
+                          help='Use micromamba package manager')
+
+    pstack.set_defaults(func=lambda args: stack_main(
+        project_root=args.project_root,
+        env_name=args.env,
+        package_manager=args.package_manager
+    ))
 
     return p
 

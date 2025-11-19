@@ -113,6 +113,10 @@ def build_component_image(comp: Component,
             "cpuset": comp.cpuset,
             "mount_shm": comp.mount_shm,
             "rt_enabled": comp.rt_enabled,
+            "privileged": comp.privileged,
+            "runtime": comp.runtime,
+            "gpu_count": comp.gpu_count,
+            "gpu_device_ids": comp.gpu_device_ids,
         }
 
     # Handle custom Dockerfile builds
@@ -148,6 +152,10 @@ def build_component_image(comp: Component,
             "cpuset": comp.cpuset,
             "mount_shm": comp.mount_shm,
             "rt_enabled": comp.rt_enabled,
+            "privileged": comp.privileged,
+            "runtime": comp.runtime,
+            "gpu_count": comp.gpu_count,
+            "gpu_device_ids": comp.gpu_device_ids,
         }
 
     # Robocore-managed build (current logic)
@@ -237,6 +245,10 @@ def build_component_image(comp: Component,
         "cpuset": comp.cpuset,
         "mount_shm": comp.mount_shm,
         "rt_enabled": comp.rt_enabled,
+        "privileged": comp.privileged,
+        "runtime": comp.runtime,
+        "gpu_count": comp.gpu_count,
+        "gpu_device_ids": comp.gpu_device_ids,
     }
 
 def stage_main(project_root: str,
@@ -302,6 +314,32 @@ def stage_main(project_root: str,
         host_dds_manager = dds_manager if host.manager else None
         renderer.render_compose(out_path, staged_comps, cfg, host=host, dds_manager=host_dds_manager)
         print(f"[stage] Wrote '{compose_name}'")
+
+    # Generate superclient.xml for local development (robostack)
+    if dds_manager:
+        robocore_dir = os.path.join(project_root, '.robocore')
+        os.makedirs(robocore_dir, exist_ok=True)
+        superclient_path = os.path.join(robocore_dir, 'superclient.xml')
+
+        # Get local IP for DDS communication
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((dds_manager.effective_dds_ip, 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            local_ip = "127.0.0.1"
+
+        renderer.render_superclient(
+            superclient_path,
+            participantID=1,  # Local dev machine uses participant ID 1
+            this_host_ip=local_ip,
+            dds_server_host_ip=dds_manager.effective_dds_ip
+        )
+        print(Fore.GREEN + f"[stage] ✓ Generated superclient.xml for local development")
+        print(Fore.CYAN + f"[stage]   Location: {superclient_path}")
+        print(Fore.CYAN + f"[stage]   DDS Server: {dds_manager.effective_dds_ip}:11811")
 
 if __name__ == "__main__":
     import argparse

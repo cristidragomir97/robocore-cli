@@ -4,7 +4,14 @@ FROM ubuntu:{{ ubuntu }} AS common-builder
 # Fix for host.docker.internal on Linux
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
+
+# Configure apt to retry and handle mirror sync issues
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
+    echo 'Acquire::http::Timeout "120";' >> /etc/apt/apt.conf.d/80-retries && \
+    echo 'Acquire::ftp::Timeout "120";' >> /etc/apt/apt.conf.d/80-retries
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    apt-get update && apt-get install -y --fix-missing \
     locales \
     curl \
     gnupg2 \
@@ -28,12 +35,12 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | a
 RUN sed -i 's|https://packages.ros.org|http://packages.ros.org|g' /etc/apt/sources.list.d/ros2-latest.list
 
 # Install ROS2 base + build tools
-RUN apt-get update && apt-get install -y \
+RUN apt-get clean && apt-get update && apt-get install -y --fix-missing \
     ros-{{ ros_distro }}-ros-base \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-pip && \
-    pip3 install -U vcstool && \
+    pip3 install {% if ubuntu == 'noble' %}--break-system-packages {% endif %}-U vcstool && \
     rosdep init
 
 

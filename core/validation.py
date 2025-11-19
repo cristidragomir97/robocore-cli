@@ -149,6 +149,12 @@ class ComponentConfig(BaseModel):
     # Performance optimizations
     optimisations: List[Dict[str, Any]] = Field(default_factory=list, description="Performance optimizations")
 
+    # Docker runtime options
+    privileged: bool = Field(False, description="Run container in privileged mode")
+    runtime: Optional[str] = Field(None, description="Container runtime (e.g., 'nvidia')")
+    gpu_count: Optional[int] = Field(None, description="Number of GPUs to allocate")
+    gpu_device_ids: Union[List[str], str, None] = Field(default=None, description="Specific GPU device IDs")
+
     @field_validator('source', mode='before')
     @classmethod
     def normalize_source(cls, v):
@@ -156,6 +162,14 @@ class ComponentConfig(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+    @field_validator('gpu_device_ids', mode='before')
+    @classmethod
+    def normalize_gpu_device_ids(cls, v):
+        """Normalize gpu_device_ids to list."""
+        if isinstance(v, str):
+            return [v]
+        return v if v is not None else []
 
     @model_validator(mode='after')
     def validate_source_configuration(self):
