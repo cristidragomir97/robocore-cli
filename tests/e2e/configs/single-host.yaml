@@ -1,0 +1,26 @@
+ros_distro: humble
+ros_domain_id: 42
+registry: localhost:5000
+image_prefix: test_single
+
+enable_apt_caching: true
+enable_dds_router: false
+
+hosts:
+  - name: localhost
+    ip: 127.0.0.1
+    user: testuser
+    arch: amd64
+    manager: true
+
+components:
+  - name: simple_publisher
+    source: packages/simple_publisher
+    runs_on: localhost
+    entrypoint: ros2 run simple_publisher publisher
+    launch_args: --ros-args -p publish_rate:=2.0
+
+  - name: simple_subscriber
+    source: packages/simple_subscriber
+    runs_on: localhost
+    entrypoint: ros2 run simple_subscriber subscriber

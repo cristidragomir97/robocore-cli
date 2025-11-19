@@ -1,7 +1,10 @@
 # core/config.py
 import os
 import yaml
-from .models import Host, Component
+from colorama import Fore
+from .models import Host, Component, CommonPackage
+from .validation import ConfigValidator, RobocoreConfig
+from .exceptions import ConfigurationError, SourceNotFoundError, ValidationError
 
 class Config:
     def __init__(self, data, root):
@@ -19,8 +22,9 @@ class Config:
 
         # optional / with defaults
         self.deploy_mode     = data.get('deploy_mode', 'image')
-        self.build_dir       = data.get('build_dir', 'build')
+        self.build_dir       = data.get('build_dir', '.robocore/build')
         self.components_dir  = data.get('components_dir', 'components')
+        self.workspace_dir   = data.get('workspace_dir', 'ros_ws')
         self.compose_file    = data.get('compose_file', 'docker-compose.yml')
         self.mount_root      = data.get('mount_root', f"/home/{os.getlogin()}/ros_builds")
         self.docker_port     = data.get('docker_port', 2375)
@@ -35,11 +39,11 @@ class Config:
 
         # coalesce None→[] for common & components
         common = data.get('common_packages') or []
-        self.common_packages = [ Component.from_dict(c, is_common=True)
+        self.common_packages = [ CommonPackage.from_dict(c)
                                  for c in common ]
 
         comps  = data.get('components') or []
-        self.components      = [ Component.from_dict(c, is_common=False)
+        self.components      = [ Component.from_dict(c, is_common=False, workspace_dir=self.workspace_dir)
                                  for c in comps ]
 
         # hosts: support either list or single dict
@@ -47,10 +51,44 @@ class Config:
         self.hosts = [Host(**h) for h in raw_hosts]
 
     @classmethod
-    def load(cls, project_root: str):
+    def load(cls, project_root: str, validate: bool = True):
+        """
+        Load and optionally validate configuration.
+
+        Args:
+            project_root: Path to project directory
+            validate: Run Pydantic validation (default: True)
+
+        Returns:
+            Config instance
+
+        Raises:
+            FileNotFoundError: If config.yaml doesn't exist
+            ConfigurationError: If validation fails
+        """
         path = os.path.join(project_root, 'config.yaml')
+
+        # Run validation if requested
+        if validate:
+            validator = ConfigValidator(project_root)
+            try:
+                validated_config, warnings = validator.validate_all(path)
+
+                # Print warnings
+                for warning in warnings:
+                    print(Fore.YELLOW + f"[WARNING] {warning}")
+
+            except (ConfigurationError, SourceNotFoundError, ValidationError, FileNotFoundError):
+                # Re-raise validation errors with their context intact
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ConfigurationError(f"Unexpected validation error: {e}")
+
+        # Load YAML (even if validation ran, we still need to load for backward compatibility)
         if not os.path.isfile(path):
             raise FileNotFoundError(f"config.yaml not found in {project_root}")
+
         data = yaml.safe_load(open(path)) or {}
         return cls(data, project_root)
 

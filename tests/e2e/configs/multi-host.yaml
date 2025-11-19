@@ -1,0 +1,56 @@
+ros_distro: humble
+ros_domain_id: 42
+registry: 192.168.56.10:5000
+image_prefix: test_multi
+
+enable_apt_caching: true
+enable_dds_router: true
+discovery_server: 192.168.56.10
+
+hosts:
+  - name: manager
+    ip: 192.168.56.10
+    user: vagrant
+    arch: amd64
+    manager: true
+
+  - name: worker1
+    ip: 192.168.56.11
+    user: vagrant
+    arch: amd64
+
+  - name: worker2
+    ip: 192.168.56.12
+    user: vagrant
+    arch: amd64
+
+components:
+  - name: dds_router
+    repositories:
+      - url: https://github.com/eProsima/DDS-Router.git
+        version: v2.0.0
+        folder: dds_router
+    runs_on: manager
+    entrypoint: ddsrouter
+    launch_args: -c /dds_router_config.yaml
+
+  - name: multi_publisher
+    sources:
+      - packages/multi_publisher
+      - packages/sensor_msgs_custom
+    runs_on: worker1
+    entrypoint: ros2 run multi_publisher publisher
+    launch_args: --ros-args -p topic_name:=/test_topic -p publish_rate:=1.0
+
+  - name: multi_subscriber
+    source: packages/multi_subscriber
+    runs_on: worker2
+    entrypoint: ros2 run multi_subscriber subscriber
+    launch_args: --ros-args -p topic_name:=/test_topic
+
+  - name: monitoring_node
+    source: packages/system_monitor
+    runs_on: manager
+    entrypoint: ros2 run system_monitor monitor
+    ports:
+      - "8080:8080"  # Web interface

@@ -3,8 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Build artifacts
-build/
+# Managed directory with build artifacts and temp files
+.robocore/
 
 # Mac OS stuff
 .DS_Store

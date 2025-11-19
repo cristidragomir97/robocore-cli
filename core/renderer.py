@@ -23,10 +23,11 @@ class TemplateRenderer:
                         ros_distro: str,
                         ros_domain_id: int,
                         comp,
-                        comp_src: str,
+                        source_packages: list,
                         repos_file: str,
                         superclient_path: str,
                         apt_packages,
+                        pip_packages,
                         postinstall,
                         has_repos: bool,
                         comp_src_exists: bool,
@@ -39,10 +40,11 @@ class TemplateRenderer:
             ros_distro=ros_distro,
             ros_domain_id=ros_domain_id,
             comp=comp,
-            comp_src=comp_src,
+            source_packages=source_packages,
             repos_file=repos_file,
             superclient_path=superclient_path,
             apt_packages=apt_packages,
+            pip_packages=pip_packages,
             postinstall=postinstall,
             has_repos=has_repos,
             comp_src_exists=comp_src_exists,
@@ -52,33 +54,40 @@ class TemplateRenderer:
 
 
     def render_superclient(self, out_path: str, *,
-                        component_name: str,
                         participantID: int,
                         this_host_ip: str,
                         dds_server_host_ip: str):
         self.render(
             "superclient.xml.j2",
             out_path,
-            component_name=component_name,
             participantID=participantID,
             this_host_ip=this_host_ip,
             dds_server_host_ip=dds_server_host_ip
         )
 
-    def render_compose(self, out_path, components, cfg, dds_manager=None):
+    def render_compose(self, out_path, components, cfg, host=None, dds_manager=None):
+        # Use dds_manager's effective_dds_ip if available, otherwise fall back to cfg.discovery_server
+        discovery_server = dds_manager.effective_dds_ip if dds_manager else cfg.discovery_server
+
+        # Use host-specific mount_root if host is provided, otherwise fall back to global mount_root
+        mount_root = host.effective_mount_root if host else cfg.mount_root
+
         self.render(
             "docker-compose.j2",
             out_path,
             components    = components,
-            mount_root    = cfg.mount_root,
+            mount_root    = mount_root,
             ros_distro    = cfg.ros_distro,
-            ros_domain_id = cfg.ros_domain_id, 
+            ros_domain_id = cfg.ros_domain_id,
+            registry      = cfg.registry,
+            base_image    = cfg.base_image,
             enable_dds_router = cfg.enable_dds_router,
-            discovery_server = cfg.discovery_server,
-            dds_manager       = dds_manager
+            discovery_server = discovery_server,
+            dds_manager       = dds_manager,
+            has_common_packages = bool(cfg.common_packages)
         )
 
-    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, apt_packages = []):
+    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = []):
             """
             Render Dockerfile.base.j2 → out_path
             """
@@ -88,5 +97,6 @@ class TemplateRenderer:
                 ros_distro   = ros_distro,
                 ubuntu       = ubuntu,
                 common_pkgs  = common_pkgs,
+                workspace_dir= workspace_dir,
                 apt_packages = apt_packages or []
             )

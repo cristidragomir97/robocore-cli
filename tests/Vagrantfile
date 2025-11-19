@@ -1,0 +1,352 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Multi-VM Vagrant configuration for robocore-cli end-to-end testing
+
+VAGRANTFILE_API_VERSION = "2"
+
+# VM configuration
+VMS = {
+  "manager" => {
+    "ip" => "192.168.56.10",
+    "memory" => 2048,
+    "cpus" => 2,
+    "role" => "manager"
+  },
+  "worker1" => {
+    "ip" => "192.168.56.11",
+    "memory" => 1536,
+    "cpus" => 2,
+    "role" => "worker"
+  },
+  "worker2" => {
+    "ip" => "192.168.56.12",
+    "memory" => 1536,
+    "cpus" => 2,
+    "role" => "worker"
+  },
+  "arm64-sim" => {
+    "ip" => "192.168.56.20",
+    "memory" => 2048,
+    "cpus" => 2,
+    "role" => "arm64-worker",
+    "box" => "ubuntu/jammy64"  # Will use QEMU for ARM64 emulation
+  }
+}
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  # Global VM settings
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.box_check_update = false
+
+  # Configure each VM
+  VMS.each do |name, settings|
+    config.vm.define name do |vm|
+      vm.vm.hostname = name
+      vm.vm.network "private_network", ip: settings["ip"]
+
+      # Port forwarding for debugging
+      if name == "manager"
+        vm.vm.network "forwarded_port", guest: 11811, host: 11811  # DDS Discovery Server
+        vm.vm.network "forwarded_port", guest: 5000, host: 5000   # Docker Registry
+      end
+
+      # VM resources
+      vm.vm.provider "virtualbox" do |vb|
+        vb.memory = settings["memory"]
+        vb.cpus = settings["cpus"]
+        vb.name = "robocore-test-#{name}"
+
+        # Enable nested virtualization for Docker
+        vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+        vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+      end
+
+      # Shared folder for test files
+      vm.vm.synced_folder ".", "/vagrant", disabled: false
+      vm.vm.synced_folder "../", "/robocore-cli", type: "rsync",
+        rsync__exclude: [".git/", "build/", ".robocore-cli/"]
+
+      # Provision with common setup
+      vm.vm.provision "shell", inline: <<-SHELL
+        # Update system
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get upgrade -y
+
+        # Install basic tools
+        apt-get install -y \
+          curl \
+          wget \
+          git \
+          vim \
+          htop \
+          net-tools \
+          iputils-ping \
+          openssh-server \
+          python3 \
+          python3-pip \
+          python3-venv
+
+        # Setup SSH for passwordless access
+        mkdir -p /home/vagrant/.ssh
+        chmod 700 /home/vagrant/.ssh
+        chown vagrant:vagrant /home/vagrant/.ssh
+
+        # Allow passwordless sudo for vagrant user
+        echo 'vagrant ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+        # Install Docker
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+        usermod -aG docker vagrant
+
+        # Install Docker Compose
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+
+        # Enable Docker service
+        systemctl enable docker
+        systemctl start docker
+
+        # Configure Docker daemon for remote access (test only!)
+        mkdir -p /etc/docker
+        cat > /etc/docker/daemon.json << EOF
+{
+  "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"],
+  "insecure-registries": ["192.168.56.10:5000"]
+}
+EOF
+
+        # Create systemd override to allow TCP access
+        mkdir -p /etc/systemd/system/docker.service.d
+        cat > /etc/systemd/system/docker.service.d/override.conf << EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd
+EOF
+
+        systemctl daemon-reload
+        systemctl restart docker
+
+        # Install ROS 2 Humble
+        curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+        apt-get update
+        apt-get install -y \
+          ros-humble-desktop \
+          ros-humble-rmw-fastrtps-cpp \
+          python3-colcon-common-extensions \
+          python3-rosdep \
+          python3-vcstool
+
+        # Initialize rosdep
+        rosdep init || true
+        runuser -l vagrant -c 'rosdep update'
+
+        # Source ROS in bashrc
+        echo 'source /opt/ros/humble/setup.bash' >> /home/vagrant/.bashrc
+
+        # Install robocore-cli
+        cd /robocore-cli
+        pip3 install -e .
+
+        echo "=== VM #{name} provisioning complete ==="
+      SHELL
+
+      # Role-specific provisioning
+      case settings["role"]
+      when "manager"
+        vm.vm.provision "shell", inline: <<-SHELL
+          echo "=== Setting up Manager Node ==="
+
+          # Install Docker Registry
+          docker run -d -p 5000:5000 --restart=always --name registry registry:2
+
+          # Setup DDS Discovery Server
+          mkdir -p /opt/dds-router
+          cd /opt/dds-router
+
+          # Create DDS Router configuration
+          cat > dds_router_config.yaml << EOF
+version: v4.0
+
+participants:
+  - name: SimpleParticipant
+    kind: local-discovery-server
+    id: 0
+    listening-addresses:
+      - ip: #{settings["ip"]}
+        port: 11811
+        transport: udp
+
+  - name: WanParticipant
+    kind: wan-discovery-server
+    id: 1
+    listening-addresses:
+      - ip: #{settings["ip"]}
+        port: 11811
+        transport: tcp
+EOF
+
+          # Set manager flag for tests
+          touch /tmp/is-manager
+
+          echo "=== Manager setup complete ==="
+        SHELL
+
+      when "worker"
+        vm.vm.provision "shell", inline: <<-SHELL
+          echo "=== Setting up Worker Node #{name} ==="
+
+          # Configure DDS to use discovery server
+          cat > /home/vagrant/fastdds_discovery_profile.xml << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="client" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <discovery_config>
+          <discoveryProtocol>CLIENT</discoveryProtocol>
+          <discoveryServersList>
+            <RemoteServer prefix="4D.49.47.55.45.4c.5f.42.41.52.52.4f">
+              <metatrafficUnicastLocatorList>
+                <locator>
+                  <udpv4>
+                    <address>192.168.56.10</address>
+                    <port>11811</port>
+                  </udpv4>
+                </locator>
+              </metatrafficUnicastLocatorList>
+            </RemoteServer>
+          </discoveryServersList>
+        </discovery_config>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>
+EOF
+
+          chown vagrant:vagrant /home/vagrant/fastdds_discovery_profile.xml
+
+          # Set environment variable for DDS discovery
+          echo 'export FASTRTPS_DEFAULT_PROFILES_FILE=/home/vagrant/fastdds_discovery_profile.xml' >> /home/vagrant/.bashrc
+          echo 'export ROS_DISCOVERY_SERVER=192.168.56.10:11811' >> /home/vagrant/.bashrc
+
+          echo "=== Worker #{name} setup complete ==="
+        SHELL
+
+      when "arm64-worker"
+        vm.vm.provision "shell", inline: <<-SHELL
+          echo "=== Setting up ARM64 Worker Node ==="
+
+          # Install QEMU for ARM64 emulation
+          apt-get install -y qemu-user-static binfmt-support
+
+          # Setup Docker buildx for cross-platform builds
+          runuser -l vagrant -c 'docker buildx create --name multiarch --use'
+          runuser -l vagrant -c 'docker buildx inspect --bootstrap'
+
+          # Same DDS configuration as regular workers
+          cat > /home/vagrant/fastdds_discovery_profile.xml << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="client" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <discovery_config>
+          <discoveryProtocol>CLIENT</discoveryProtocol>
+          <discoveryServersList>
+            <RemoteServer prefix="4D.49.47.55.45.4c.5f.42.41.52.52.4f">
+              <metatrafficUnicastLocatorList>
+                <locator>
+                  <udpv4>
+                    <address>192.168.56.10</address>
+                    <port>11811</port>
+                  </udpv4>
+                </locator>
+              </metatrafficUnicastLocatorList>
+            </RemoteServer>
+          </discoveryServersList>
+        </discovery_config>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>
+EOF
+
+          chown vagrant:vagrant /home/vagrant/fastdds_discovery_profile.xml
+          echo 'export FASTRTPS_DEFAULT_PROFILES_FILE=/home/vagrant/fastdds_discovery_profile.xml' >> /home/vagrant/.bashrc
+          echo 'export ROS_DISCOVERY_SERVER=192.168.56.10:11811' >> /home/vagrant/.bashrc
+
+          # Mark as ARM64 node
+          touch /tmp/is-arm64
+
+          echo "=== ARM64 Worker setup complete ==="
+        SHELL
+      end
+
+      # Final setup on last VM
+      if name == VMS.keys.last
+        vm.vm.provision "shell", inline: <<-SHELL
+          echo "=== Final cluster setup ==="
+
+          # Generate SSH keys for inter-VM communication
+          runuser -l vagrant -c 'ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""'
+
+          # Copy SSH key to all VMs (in production, use proper key management)
+          for vm_ip in #{VMS.values.map { |v| v["ip"] }.join(" ")}; do
+            if [ "$vm_ip" != "#{settings["ip"]}" ]; then
+              runuser -l vagrant -c "sshpass -p 'vagrant' ssh-copy-id -o StrictHostKeyChecking=no vagrant@$vm_ip" || true
+            fi
+          done
+
+          echo "=== Cluster setup complete ==="
+          echo "=== VMs ready for robocore-cli testing ==="
+        SHELL
+      end
+    end
+  end
+
+  # Create test runner VM (optional)
+  config.vm.define "test-runner", autostart: false do |runner|
+    runner.vm.hostname = "test-runner"
+    runner.vm.network "private_network", ip: "192.168.56.100"
+
+    runner.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 1
+      vb.name = "robocore-test-runner"
+    end
+
+    runner.vm.synced_folder "../", "/robocore-cli", type: "rsync"
+
+    runner.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      apt-get install -y python3 python3-pip python3-venv sshpass
+
+      # Install robocore-cli
+      cd /robocore-cli
+      pip3 install -e .
+
+      # Install test dependencies
+      pip3 install pytest pytest-asyncio paramiko pyyaml
+
+      # Setup SSH for accessing other VMs
+      runuser -l vagrant -c 'ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""'
+
+      echo "=== Test runner ready ==="
+    SHELL
+  end
+end
+
+# Helper commands (add to Makefile or scripts)
+#
+# Start all VMs:     vagrant up
+# Start specific VM: vagrant up manager
+# SSH to VM:         vagrant ssh manager
+# Stop all VMs:      vagrant halt
+# Destroy all VMs:   vagrant destroy -f
+# Run tests:         vagrant ssh test-runner -c "cd /robocore-cli && python -m pytest tests/e2e/"

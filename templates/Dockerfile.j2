@@ -5,6 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
+SHELL ["/bin/bash","-lc"]
 #ENV ROS_WS=/ros_ws
 
 # 1) Install any component-specific system packages
@@ -14,6 +15,11 @@ RUN apt-get update && apt-get install -y \
     {{ pkg }} \
 {%- endfor %} \
   && rm -rf /var/lib/apt/lists/*
+{% endif %}
+
+# 1b) Install any component-specific pip packages
+{% if pip_packages %}
+RUN pip3 install --no-cache-dir {% if ros_distro == 'jazzy' %}--break-system-packages {% endif %} {{ pip_packages | join(' ') }}
 {% endif %}
 
 # 2) VCS repos → build into /vcs_ws/install
@@ -33,46 +39,57 @@ RUN vcs import /vcs_ws/src < /vcs_ws/repos.yaml
 
 # ─── Build workspace ──────────────────────────────────────────────────────
 WORKDIR /vcs_ws
-RUN bash -lc "\
-  apt-get update && \
-  source /opt/ros/$ROS_DISTRO/setup.bash && \
-  rosdep init || true && \
-  rosdep update && \
-  rosdep install --from-paths src --ignore-src -y && \
-  colcon build --symlink-install --event-handlers console_direct+ \
-"
+RUN apt-get update \
+ && source /opt/ros/$ROS_DISTRO/setup.bash \
+ && rosdep init || true \
+ && rosdep update \
+ && rosdep install --from-paths src --ignore-src -y \
+ && colcon build --symlink-install --event-handlers console_direct+
 
 # ─── Optional: Validate build success ─────────────────────────────────────
 
 {% if postinstall %}
 # ─── VCS Postinstall Hooks ────────────────────────────────────────────────
 {% for cmd in postinstall %}
-RUN bash -lc "\
-  source /opt/ros/$ROS_DISTRO/setup.bash && \
-  source /vcs_ws/install/setup.bash && \
-  {{ cmd }} \
-"
+RUN source /opt/ros/$ROS_DISTRO/setup.bash \
+ && source /vcs_ws/install/setup.bash \
+ && {{ cmd }}
 {% endfor %}
 {% endif %}
 
 {% endif %}
 
 
-# 3) Copy & prepare any local source (for dependency install only)
-{% if comp_src_exists %}
-RUN mkdir -p /ros_ws/src/
-COPY {{ comp_src }} /ros_ws/src/
-{% endif %}
-
-
-{% if comp_src_exists %}
+# 3) Copy & prepare any local source
+{% if source_packages %}
 WORKDIR /ros_ws
-RUN bash -lc "\
-    apt-get update && \
-    source /opt/ros/$ROS_DISTRO/setup.bash && \
-    rosdep init || true && \
-    rosdep update && \
-    rosdep install --from-paths src --ignore-src -y "
+RUN mkdir -p src
+
+# Copy source packages directly from their original locations
+{% for src_path, pkg_name in source_packages %}
+COPY {{ src_path }} /ros_ws/src/{{ pkg_name }}
+{% endfor %}
+
+# Verify we have actual files
+RUN echo '=== Checking source directory structure ===' \
+ && ls -la src/ \
+ && echo '=== Found package.xml files ===' \
+ && find src -type f -name package.xml -exec echo '{}' \;
+
+# Install dependencies
+RUN set -exo pipefail \
+ && apt-get update \
+ && source /opt/ros/$ROS_DISTRO/setup.bash \
+ && source /ros_ws_common/install/setup.bash \
+ && rosdep update \
+ && echo '=== Checking what rosdep will install ===' \
+ && rosdep keys --rosdistro $ROS_DISTRO --from-paths src --ignore-src | sort | uniq || echo 'No rosdep keys found' \
+ && echo '=== Installing dependencies ===' \
+ && rosdep install --rosdistro $ROS_DISTRO --from-paths src --ignore-src -r -y
+
+# Sanity check
+RUN echo '=== Verifying dependencies ===' \
+ && rosdep check --rosdistro $ROS_DISTRO --from-paths src --ignore-src || true
 {% endif %}
 
 
