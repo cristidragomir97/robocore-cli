@@ -117,6 +117,11 @@ def build_component_image(comp: Component,
             "runtime": comp.runtime,
             "gpu_count": comp.gpu_count,
             "gpu_device_ids": comp.gpu_device_ids,
+            "nvidia": comp.nvidia,
+            "gui": comp.gui,
+            "volumes": comp.volumes,
+            "stdin_open": comp.stdin_open,
+            "tty": comp.tty,
         }
 
     # Handle custom Dockerfile builds
@@ -156,6 +161,11 @@ def build_component_image(comp: Component,
             "runtime": comp.runtime,
             "gpu_count": comp.gpu_count,
             "gpu_device_ids": comp.gpu_device_ids,
+            "nvidia": comp.nvidia,
+            "gui": comp.gui,
+            "volumes": comp.volumes,
+            "stdin_open": comp.stdin_open,
+            "tty": comp.tty,
         }
 
     # Robocore-managed build (current logic)
@@ -249,16 +259,22 @@ def build_component_image(comp: Component,
         "runtime": comp.runtime,
         "gpu_count": comp.gpu_count,
         "gpu_device_ids": comp.gpu_device_ids,
+        "nvidia": comp.nvidia,
+        "gui": comp.gui,
+        "volumes": comp.volumes,
+        "stdin_open": comp.stdin_open,
+        "tty": comp.tty,
     }
 
 def stage_main(project_root: str,
                component: Optional[str] = None,
                refresh: bool = False,
-               force_base: bool = False):
+               force_base: bool = False,
+               config_file: str = 'config.yaml'):
     project_root = os.path.abspath(project_root)
     os.chdir(project_root)
 
-    cfg = Config.load(project_root)
+    cfg = Config.load(project_root, config_file=config_file)
     hosts_map = {h.name: h for h in cfg.hosts}
     comps = cfg.filter_components(name=component)
     if not comps:
@@ -276,7 +292,7 @@ def stage_main(project_root: str,
 
     # Build base image once for all platforms
     from commands.prepare_base import prepare_base_main
-    prepare_base_main(project_root, force=force_base)
+    prepare_base_main(project_root, config_file=config_file, force=force_base)
     base_tag = cfg.base_image
 
     staged_by_host = {}

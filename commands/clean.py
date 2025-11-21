@@ -6,7 +6,7 @@ import subprocess
 from core.config import Config
 from core.docker import DockerHelper
 
-def clean_main(project_root: str, remote: bool = False, local: bool = True):
+def clean_main(project_root: str, remote: bool = False, local: bool = True, config_file: str = 'config.yaml'):
     """
     Clean build artifacts and managed workspaces.
 
@@ -14,9 +14,10 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
         project_root: Path to the project root
         remote: Clean remote hosts as well
         local: Clean local artifacts (default True)
+        config_file: Name or path to configuration file (default: 'config.yaml')
     """
     project_root = os.path.abspath(project_root)
-    cfg = Config.load(project_root)
+    cfg = Config.load(project_root, config_file=config_file)
     docker = DockerHelper()
 
     # Clean local .robocore directory
@@ -43,6 +44,12 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
         # Clean remote hosts
         for host in cfg.hosts:
             mount_root = host.effective_mount_root
+            is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
+            if is_localhost:
+                print(f"[clean:{host.name}] Skipping remote clean for localhost")
+                continue
+
             print(f"[clean:{host.name}] Cleaning remote directories...")
 
             # Stop and remove containers first

@@ -2,11 +2,11 @@ import os
 from core.config import Config
 from core.docker import DockerHelper
 
-def viz_main(project_root: str):
+def viz_main(project_root: str, config_file: str = 'config.yaml'):
     project_root = os.path.abspath(project_root)
     os.chdir(project_root)
-    
-    cfg = Config.load(project_root)
+
+    cfg = Config.load(project_root, config_file=config_file)
     docker = DockerHelper()
 
     image = f"tiryoh/ros2-desktop-vnc:{cfg.ros_distro}"

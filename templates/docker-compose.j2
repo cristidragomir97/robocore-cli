@@ -20,7 +20,7 @@ services:
     {% if comp.runtime %}
     runtime: {{ comp.runtime }}
     {% endif %}
-    {% if comp.comp_src or comp.mount_shm %}
+    {% if comp.comp_src or comp.mount_shm or gui or comp.gui or comp.volumes %}
     volumes:
       {% if comp.comp_src %}
       - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:rw"
@@ -28,6 +28,19 @@ services:
       {% if comp.mount_shm %}
       - "/dev/shm:/dev/shm:rw"
       {% endif %}
+      {% if gui or comp.gui %}
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro"
+      {% endif %}
+      {% for vol in comp.volumes %}
+      - "{{ vol }}"
+      {% endfor %}
+    {% endif %}
+    {% if comp.stdin_open %}
+    stdin_open: true
+    {% endif %}
+    {% if comp.tty %}
+    tty: true
     {% endif %}
     {% if comp.devices %}
     devices:
@@ -66,6 +79,14 @@ services:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
       - ROS_DISCOVERY_SERVER={{ discovery_server }}
+      {% if gui or comp.gui %}
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      {% endif %}
+      {% if nvidia or comp.nvidia %}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      {% endif %}
       {% for key, value in comp.environment.items() %}
       - {{ key }}={{ value }}
       {% endfor %}
@@ -78,7 +99,7 @@ services:
     {% if comp.cpuset %}
     cpuset: "{{ comp.cpuset }}"
     {% endif %}
-    {% if comp.gpu_count or comp.gpu_device_ids %}
+    {% if nvidia or comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
     deploy:
       resources:
         reservations:
@@ -143,4 +164,22 @@ services:
         source /opt/ros/{{ ros_distro }}/setup.bash &&
         fastdds discovery -i 0 -l {{ dds_manager.effective_dds_ip }} -p 11811
       "
+{% endif %}
+{% set named_volumes = [] %}
+{% for comp in components %}
+{% for vol in comp.volumes %}
+{% set vol_source = vol.split(':')[0] %}
+{% if not vol_source.startswith('/') and not vol_source.startswith('.') and not vol_source.startswith('$') and not vol_source.startswith('~') %}
+{% if vol_source not in named_volumes %}
+{% set _ = named_volumes.append(vol_source) %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if named_volumes %}
+
+volumes:
+{% for vol_name in named_volumes %}
+  {{ vol_name }}:
+{% endfor %}
 {% endif %}

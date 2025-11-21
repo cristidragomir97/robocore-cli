@@ -3,12 +3,27 @@ import os
 import subprocess
 
 def rsync_file(local_path: str, host, remote_path: str):
-    cmd = [
-        "rsync", "-az", "--inplace", "--no-whole-file",
-        local_path,
-        f"{host.user}@{host.ip}:{remote_path}"
-    ]
-    print(f"[deploy] rsync: {' '.join(cmd)}")
+    # Check if host is localhost
+    is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
+    if is_localhost:
+        # For localhost, use local rsync without SSH
+        # Ensure the destination directory exists
+        os.makedirs(os.path.dirname(remote_path), exist_ok=True)
+        cmd = [
+            "rsync", "-az", "--inplace", "--no-whole-file",
+            local_path,
+            remote_path
+        ]
+        print(f"[deploy] rsync (localhost): {' '.join(cmd)}")
+    else:
+        cmd = [
+            "rsync", "-az", "--inplace", "--no-whole-file",
+            local_path,
+            f"{host.user}@{host.ip}:{remote_path}"
+        ]
+        print(f"[deploy] rsync: {' '.join(cmd)}")
+
     subprocess.run(cmd, check=True)
 
 class SyncManager:
@@ -19,10 +34,21 @@ class SyncManager:
 
     def rsync_builds(self, project_root,  host, components):
         mount_root = host.effective_mount_root
+
+        # Check if host is localhost
+        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
         for comp in components:
             src = os.path.join(self.build, comp.name, self.workspace_dir) + "/"
             if not os.path.isdir(src):
                 print(f"[sync] Skipping {comp.name} (no build found at {src})")
+                continue
+
+            if is_localhost:
+                # For localhost, builds are already in place - no sync needed
+                # The compose file will mount directly from .robocore/build/<component>/ros_ws
+                print(f"[sync] Skipping rsync for {comp.name} on localhost ({host.name})")
+                print(f"[sync] Using local build directory: {src}")
                 continue
             else:
                 print(f"[sync] Syncing {comp.name} build to {host.name} ({host.ip})")

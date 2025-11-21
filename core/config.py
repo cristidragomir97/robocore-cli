@@ -33,6 +33,10 @@ class Config:
         self.enable_dds_router = data.get('enable_dds_router', False)
         self.discovery_server = data.get('discovery_server', 'localhost')
 
+        # Global container options
+        self.nvidia = data.get('nvidia', False)
+        self.gui = data.get('gui', False)
+
         
         # NEW: system‐level apt packages for the base image
         self.apt_packages    = data.get('apt_packages', [])
@@ -51,22 +55,27 @@ class Config:
         self.hosts = [Host(**h) for h in raw_hosts]
 
     @classmethod
-    def load(cls, project_root: str, validate: bool = True):
+    def load(cls, project_root: str, config_file: str = 'config.yaml', validate: bool = True):
         """
         Load and optionally validate configuration.
 
         Args:
             project_root: Path to project directory
+            config_file: Name or path to configuration file (default: 'config.yaml')
             validate: Run Pydantic validation (default: True)
 
         Returns:
             Config instance
 
         Raises:
-            FileNotFoundError: If config.yaml doesn't exist
+            FileNotFoundError: If configuration file doesn't exist
             ConfigurationError: If validation fails
         """
-        path = os.path.join(project_root, 'config.yaml')
+        # Support both absolute paths and relative paths
+        if os.path.isabs(config_file):
+            path = config_file
+        else:
+            path = os.path.join(project_root, config_file)
 
         # Run validation if requested
         if validate:
@@ -87,7 +96,7 @@ class Config:
 
         # Load YAML (even if validation ran, we still need to load for backward compatibility)
         if not os.path.isfile(path):
-            raise FileNotFoundError(f"config.yaml not found in {project_root}")
+            raise FileNotFoundError(f"Configuration file '{config_file}' not found at {path}")
 
         data = yaml.safe_load(open(path)) or {}
         return cls(data, project_root)

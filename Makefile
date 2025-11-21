@@ -41,9 +41,9 @@ install:
 	pip install -e .
 
 install-dev:
-	pip install -e .
-	pip install -r tests/requirements-test.txt
-	pip install black flake8 pytest pytest-cov pytest-asyncio
+	pip install -e . --break-system-packages
+	pip install -r tests/requirements-test.txt --break-system-packages
+	pip install black flake8 pytest pytest-cov pytest-asyncio --break-system-packages
 
 # Testing targets
 test: test-unit test-integration test-local

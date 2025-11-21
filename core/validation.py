@@ -154,6 +154,11 @@ class ComponentConfig(BaseModel):
     runtime: Optional[str] = Field(None, description="Container runtime (e.g., 'nvidia')")
     gpu_count: Optional[int] = Field(None, description="Number of GPUs to allocate")
     gpu_device_ids: Union[List[str], str, None] = Field(default=None, description="Specific GPU device IDs")
+    nvidia: bool = Field(False, description="Enable NVIDIA GPU support for this component")
+    gui: bool = Field(False, description="Enable X11 GUI forwarding for this component")
+    volumes: List[str] = Field(default_factory=list, description="Additional volume mounts (e.g., '/host/path:/container/path:rw' or 'named_vol:/path')")
+    stdin_open: bool = Field(False, description="Keep stdin open (docker -i)")
+    tty: bool = Field(False, description="Allocate a pseudo-TTY (docker -t)")
 
     @field_validator('source', mode='before')
     @classmethod
@@ -236,6 +241,10 @@ class RobocoreConfig(BaseModel):
     # DDS configuration
     enable_dds_router: bool = Field(False, description="Enable DDS router")
     discovery_server: str = Field('localhost', description="Discovery server address")
+
+    # Global container options
+    nvidia: bool = Field(False, description="Enable NVIDIA GPU support for all containers")
+    gui: bool = Field(False, description="Enable X11 GUI forwarding for all containers")
 
     # System packages
     apt_packages: List[str] = Field(default_factory=list, description="System-level apt packages")

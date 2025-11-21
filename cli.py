@@ -27,6 +27,8 @@ def create_parser():
     )
     p.add_argument('-p','--project-root', dest='project_root',
                    help='Path to project root')
+    p.add_argument('-f','--config', dest='config_file', default='config.yaml',
+                   help='Path to configuration file (default: config.yaml)')
     p.add_argument('project_root_pos', nargs='?',
                    help=argparse.SUPPRESS)
 
@@ -34,14 +36,14 @@ def create_parser():
 
 
     pv = sp.add_parser('viz', help='Launch local ROS2 GUI desktop (RViz, rqt) in a container')
-    pv.set_defaults(func=lambda args: viz_main(args.project_root))
+    pv.set_defaults(func=lambda args: viz_main(args.project_root, config_file=args.config_file))
 
     pb = sp.add_parser('prepare-base', help='Build base ROS image')
-    pb.set_defaults(func=lambda args: prepare_base_main(args.project_root))
+    pb.set_defaults(func=lambda args: prepare_base_main(args.project_root, config_file=args.config_file))
 
     # init
     pi = sp.add_parser('init', help='Bootstrap a new project')
-    pi.set_defaults(func=lambda args: init_main(args.project_root))
+    pi.set_defaults(func=lambda args: init_main(args.project_root, config_file=args.config_file))
 
     # stage (formerly prep)
     ps = sp.add_parser('stage', help='Generate multi-stage Dockerfiles & Compose')
@@ -53,7 +55,8 @@ def create_parser():
         project_root=args.project_root,
         component=args.component,
         refresh=args.refresh,
-        force_base=args.force_base
+        force_base=args.force_base,
+        config_file=args.config_file
     ))
 
     # build
@@ -62,7 +65,8 @@ def create_parser():
                     help='Only build this single component')
     pb.set_defaults(func=lambda args: build_main(
         project_root=args.project_root,
-        component=args.component
+        component=args.component,
+        config_file=args.config_file
     ))
 
     # deploy
@@ -70,11 +74,12 @@ def create_parser():
     pd.add_argument('--simulate', action='store_true',
                     help='Run only simulate:true services locally')
     pd.add_argument('--host', default=None,
-                    help='Only deploy to this host (name from config.yaml)')
+                    help='Only deploy to this host (name from config file)')
     pd.set_defaults(func=lambda args: deploy_main(
         project_root=args.project_root,
         simulate=args.simulate,
-        host_name=args.host
+        host_name=args.host,
+        config_file=args.config_file
     ))
     # shell
     pc = sp.add_parser(
@@ -89,7 +94,8 @@ def create_parser():
 
     pc.set_defaults(func=lambda args: shell_main(
             target       = args.target,
-            project_root = args.project_root
+            project_root = args.project_root,
+            config_file  = args.config_file
         ))
 
     # clean
@@ -101,12 +107,13 @@ def create_parser():
     pcl.set_defaults(func=lambda args: clean_main(
         project_root=args.project_root,
         remote=args.remote and not args.local_only,
-        local=True
+        local=True,
+        config_file=args.config_file
     ))
 
     # validate
     pval = sp.add_parser('validate', help='Validate configuration without executing operations')
-    pval.set_defaults(func=lambda args: sys.exit(validate_main(project_root=args.project_root)))
+    pval.set_defaults(func=lambda args: sys.exit(validate_main(project_root=args.project_root, config_file=args.config_file)))
 
     # stack
     pstack = sp.add_parser('stack', help='Activate robostack environment with DDS configuration')
@@ -125,7 +132,8 @@ def create_parser():
     pstack.set_defaults(func=lambda args: stack_main(
         project_root=args.project_root,
         env_name=args.env,
-        package_manager=args.package_manager
+        package_manager=args.package_manager,
+        config_file=args.config_file
     ))
 
     return p

@@ -12,8 +12,17 @@ class DockerHelper:
         :param host: The remote host object with 'ip' and 'port' attributes.
         :param image: The Docker image to pull.
         """
-        url = f"tcp://{host.ip}:{host.port}"
-        cc  = DockerClient(host=url)
+        # Check if host is localhost
+        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
+        if is_localhost:
+            # Use local Docker daemon
+            cc = DockerClient()
+        else:
+            # Connect to remote Docker daemon via TCP
+            url = f"tcp://{host.ip}:{host.port}"
+            cc = DockerClient(host=url)
+
         cc.pull(image)
 
     def build_multiarch(self, image_tag, context, dockerfile, platforms, push=True):
@@ -47,11 +56,29 @@ class DockerHelper:
         cc.compose.up(service_names=services or [], detach=detach)
 
     def compose_up_remote(self, host, compose_file, services=None):
-        url = f"tcp://{host.ip}:{host.port}"
-        cc  = DockerClient(host=url, compose_files=[compose_file])
+        # Check if host is localhost
+        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
+        if is_localhost:
+            # Use local Docker daemon
+            cc = DockerClient(compose_files=[compose_file])
+        else:
+            # Connect to remote Docker daemon via TCP
+            url = f"tcp://{host.ip}:{host.port}"
+            cc = DockerClient(host=url, compose_files=[compose_file])
+
         cc.compose.up(detach=False)
 
     def compose_down_remote(self, host, compose_file):
-        url = f"tcp://{host.ip}:{host.port}"
-        cc  = DockerClient(host=url, compose_files=[compose_file])
+        # Check if host is localhost
+        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
+
+        if is_localhost:
+            # Use local Docker daemon
+            cc = DockerClient(compose_files=[compose_file])
+        else:
+            # Connect to remote Docker daemon via TCP
+            url = f"tcp://{host.ip}:{host.port}"
+            cc = DockerClient(host=url, compose_files=[compose_file])
+
         cc.compose.down()

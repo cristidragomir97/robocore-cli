@@ -122,12 +122,13 @@ def verify_package_manager(manager: str) -> bool:
         return False
 
 
-def stack_main(project_root: Optional[str] = None, env_name: str = "ros_env", package_manager: Optional[str] = None):
+def stack_main(project_root: Optional[str] = None, env_name: str = "ros_env", package_manager: Optional[str] = None, config_file: str = 'config.yaml'):
     """
     Activate robostack environment with DDS configuration.
 
     Args:
         project_root: Path to project root
+        config_file: Name or path to configuration file (default: 'config.yaml')
         env_name: Name of the robostack environment (default: "ros_env")
         package_manager: Explicitly specified package manager (micromamba, mamba, or pixi)
     """
@@ -181,9 +182,9 @@ def stack_main(project_root: Optional[str] = None, env_name: str = "ros_env", pa
     # 3) Load project config
     pr = os.path.abspath(project_root or ".")
     try:
-        cfg = Config.load(pr)
+        cfg = Config.load(pr, config_file=config_file)
     except FileNotFoundError:
-        print(Fore.RED + f"[stack] ERROR: config.yaml not found in {pr}")
+        print(Fore.RED + f"[stack] ERROR: Configuration file '{config_file}' not found in {pr}")
         print(Fore.YELLOW + "[stack] Run 'robocore-cli init' to create a project first")
         sys.exit(1)
     except Exception as e:

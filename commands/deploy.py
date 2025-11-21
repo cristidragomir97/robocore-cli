@@ -9,8 +9,8 @@ from core.sync   import SyncManager
 from core.models import Host
 from python_on_whales.exceptions import DockerException
 
-def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
-    cfg    = Config.load(project_root)
+def deploy_main(project_root: str, simulate: bool=False, host_name: str = None, config_file: str = 'config.yaml'):
+    cfg    = Config.load(project_root, config_file=config_file)
     sync   = SyncManager(cfg)
     docker = DockerHelper()
 

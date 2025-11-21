@@ -8,7 +8,8 @@ from core.docker   import DockerHelper
 from core.models   import Component
 
 def shell_main(target: str,
-               project_root: Optional[str] = None):
+               project_root: Optional[str] = None,
+               config_file: str = 'config.yaml'):
     """
     Launch an interactive ROS shell for:
       • A named component
@@ -20,7 +21,7 @@ def shell_main(target: str,
     os.chdir(pr)
 
     # 2) Load config
-    cfg = Config.load(pr)
+    cfg = Config.load(pr, config_file=config_file)
     docker = DockerHelper()
     image = cfg.base_image
 

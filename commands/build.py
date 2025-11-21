@@ -3,11 +3,32 @@ import os
 import sys
 import shutil
 import yaml
+import platform
 from typing import Optional, List, Tuple
 
 from python_on_whales import DockerClient
 from core.config   import Config
 from core.models   import Component, Host
+
+def get_host_arch() -> str:
+    """Get the current machine's architecture in Docker format."""
+    machine = platform.machine().lower()
+    if machine in ('x86_64', 'amd64'):
+        return 'amd64'
+    elif machine in ('aarch64', 'arm64'):
+        return 'arm64'
+    elif machine.startswith('arm'):
+        return 'armv7'
+    return machine
+
+def get_host(hosts_map: dict, comp: Component, cfg: Config) -> Host:
+    """Get the host for a component based on runs_on."""
+    if not comp.runs_on:
+        sys.exit(f"[build] ERROR: component '{comp.name}' missing 'runs_on'")
+    host = hosts_map.get(comp.runs_on)
+    if not host:
+        sys.exit(f"[build] ERROR: runs_on '{comp.runs_on}' not defined")
+    return host
 
 def resolve_source_packages(comp: Component, cfg: Config) -> List[Tuple[str, str]]:
     """
@@ -38,7 +59,7 @@ def resolve_source_packages(comp: Component, cfg: Config) -> List[Tuple[str, str
 
     return packages
 
-def build_main(project_root: str, component: Optional[str] = None):
+def build_main(project_root: str, component: Optional[str] = None, config_file: str = 'config.yaml'):
     """
     For each component that has local source packages:
       1) Copy sources → build/<comp>/ros_ws/src
@@ -50,9 +71,11 @@ def build_main(project_root: str, component: Optional[str] = None):
     os.chdir(project_root)
 
     # 2) load config & pick components
-    cfg   = Config.load(project_root)
+    cfg   = Config.load(project_root, config_file=config_file)
     docker = DockerClient()
     comps = cfg.filter_components(name=component)
+    hosts_map = {h.name: h for h in cfg.hosts}
+    host_arch = get_host_arch()
     if not comps:
         print(f"[build] No components to build (filter={component})")
         return
@@ -105,11 +128,25 @@ def build_main(project_root: str, component: Optional[str] = None):
             )
         full_cmd = " && ".join(cmds)
 
+        # Determine target platform for potential emulation
+        host = get_host(hosts_map, comp, cfg)
+        target_arch = host.arch
+        target_platform = f"linux/{target_arch}"
+
+        if target_arch != host_arch:
+            print(f"[build] [{comp_name}] Cross-compiling: {host_arch} → {target_arch} (using emulation)")
+
         print(f"[build] [{comp_name}] Running build container:")
         print(f"         {full_cmd}")
 
         # run the unified builder image (created in stage)
         image = comp.image_tag(cfg)
+
+        # Pull image with correct platform if cross-compiling
+        if target_arch != host_arch:
+            print(f"[build] [{comp_name}] Pulling image for {target_platform}...")
+            docker.image.pull(image, platform=target_platform)
+
         docker.run(
             image       = image,
             command     = ["bash", "-lc", full_cmd],
@@ -118,6 +155,7 @@ def build_main(project_root: str, component: Optional[str] = None):
             workdir     = "/ros_ws",
             envs        = {"ROS_DISTRO": cfg.ros_distro},
             volumes     = [(os.path.abspath(ws_root), "/ros_ws", "rw")],
+            platform    = target_platform,
         )
 
         print(f"[build] '{comp_name}' done; install at {ws_root}/install")

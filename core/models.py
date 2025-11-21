@@ -114,6 +114,11 @@ class Component:
     runtime: Optional[str] = None      # Container runtime (e.g., "nvidia")
     gpu_count: Optional[int] = None    # Number of GPUs (for nvidia runtime)
     gpu_device_ids: List[str] = field(default_factory=list)  # Specific GPU IDs (e.g., ["0", "1"])
+    nvidia: bool = False               # Enable NVIDIA GPU support
+    gui: bool = False                  # Enable X11 GUI forwarding
+    volumes: List[str] = field(default_factory=list)  # Additional volume mounts
+    stdin_open: bool = False           # Keep stdin open (docker -i)
+    tty: bool = False                  # Allocate pseudo-TTY (docker -t)
 
     @classmethod
     def from_dict(cls, d, is_common=False, workspace_dir="ros_ws"):
@@ -170,6 +175,11 @@ class Component:
         gpu_device_ids = d.get('gpu_device_ids', [])
         if isinstance(gpu_device_ids, str):
             gpu_device_ids = [gpu_device_ids]  # Convert single string to list
+        nvidia = d.get('nvidia', False)
+        gui = d.get('gui', False)
+        volumes = d.get('volumes', [])
+        stdin_open = d.get('stdin_open', False)
+        tty = d.get('tty', False)
 
         return cls(
             name        = d['name'],
@@ -200,6 +210,11 @@ class Component:
             runtime     = runtime,
             gpu_count   = gpu_count,
             gpu_device_ids = gpu_device_ids,
+            nvidia      = nvidia,
+            gui         = gui,
+            volumes     = volumes,
+            stdin_open  = stdin_open,
+            tty         = tty,
         )
 
     @property

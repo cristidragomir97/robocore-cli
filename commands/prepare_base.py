@@ -64,8 +64,8 @@ def save_base_hash(base_dir: str, hash_value: str):
     with open(hash_file, 'w') as f:
         f.write(hash_value)
 
-def prepare_base_main(project_root: str, force: bool = False):
-    cfg = Config.load(project_root)
+def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force: bool = False):
+    cfg = Config.load(project_root, config_file=config_file)
     tpl_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
     renderer = TemplateRenderer(tpl_dir)
     docker = DockerHelper()
