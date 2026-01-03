@@ -1,14 +1,19 @@
 # ─── STAGE 0: Build ROS2 + common_packages ───────────────────────────────
 FROM ubuntu:{{ ubuntu }} AS common-builder
 
-# Fix for host.docker.internal on Linux
-
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Configure apt to retry and handle mirror sync issues
 RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
     echo 'Acquire::http::Timeout "120";' >> /etc/apt/apt.conf.d/80-retries && \
     echo 'Acquire::ftp::Timeout "120";' >> /etc/apt/apt.conf.d/80-retries
+
+{% if apt_mirror %}
+# Configure custom Ubuntu apt mirror: {{ apt_mirror }}
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|{{ apt_mirror }}|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu|{{ apt_mirror }}|g' /etc/apt/sources.list && \
+    sed -i 's|http://ports.ubuntu.com/ubuntu-ports|{{ apt_mirror }}|g' /etc/apt/sources.list
+{% endif %}
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* && \
     apt-get update && apt-get install -y --fix-missing \
@@ -29,10 +34,15 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 # Add ROS2 apt repository
+{% if ros_apt_mirror %}
+# Using custom ROS apt mirror: {{ ros_apt_mirror }}
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
+    sh -c 'echo "deb [trusted=yes] [arch=$(dpkg --print-architecture)]  {{ ros_apt_mirror }} $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+{% else %}
+# Using default ROS apt mirror (packages.ros.org)
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
     sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
-
-RUN sed -i 's|https://packages.ros.org|http://packages.ros.org|g' /etc/apt/sources.list.d/ros2-latest.list
+{% endif %}
 
 # Install ROS2 base + build tools
 RUN apt-get clean && apt-get update && apt-get install -y --fix-missing \

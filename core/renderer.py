@@ -1,6 +1,12 @@
 # core/renderer.py
 import os
+import platform
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+
+def is_macos() -> bool:
+    """Check if running on macOS."""
+    return platform.system() == 'Darwin'
 
 class TemplateRenderer:
     def __init__(self, template_dir: str):
@@ -69,8 +75,15 @@ class TemplateRenderer:
         # Use dds_manager's effective_dds_ip if available, otherwise fall back to cfg.discovery_server
         discovery_server = dds_manager.effective_dds_ip if dds_manager else cfg.discovery_server
 
-        # Use host-specific mount_root if host is provided, otherwise fall back to global mount_root
-        mount_root = host.effective_mount_root if host else cfg.mount_root
+        # Check if host is localhost
+        is_localhost = host and host.ip in ('localhost', '127.0.0.1', '::1')
+
+        # For localhost, use local build directory; otherwise use remote mount_root
+        if is_localhost:
+            # Use absolute path to local build directory
+            mount_root = os.path.abspath(os.path.join(cfg.root, cfg.build_dir))
+        else:
+            mount_root = host.effective_mount_root if host else cfg.mount_root
 
         self.render(
             "docker-compose.j2",
@@ -84,12 +97,24 @@ class TemplateRenderer:
             enable_dds_router = cfg.enable_dds_router,
             discovery_server = discovery_server,
             dds_manager       = dds_manager,
-            has_common_packages = bool(cfg.common_packages)
+            has_common_packages = bool(cfg.common_packages),
+            is_macos      = is_macos(),
+            is_localhost  = is_localhost
         )
 
-    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = []):
+    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = [], apt_mirror: str = None, ros_apt_mirror: str = None):
             """
             Render Dockerfile.base.j2 → out_path
+
+            Args:
+                out_path: Output file path
+                ros_distro: ROS distribution (e.g., 'humble')
+                ubuntu: Ubuntu release (e.g., 'jammy')
+                common_pkgs: List of common packages
+                workspace_dir: Workspace directory name
+                apt_packages: System apt packages to install
+                apt_mirror: Custom Ubuntu apt mirror URL (optional)
+                ros_apt_mirror: Custom ROS apt mirror URL (optional)
             """
             self.render(
                 "Dockerfile.base.j2",
@@ -98,5 +123,7 @@ class TemplateRenderer:
                 ubuntu       = ubuntu,
                 common_pkgs  = common_pkgs,
                 workspace_dir= workspace_dir,
-                apt_packages = apt_packages or []
+                apt_packages = apt_packages or [],
+                apt_mirror   = apt_mirror,
+                ros_apt_mirror = ros_apt_mirror
             )

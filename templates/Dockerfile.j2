@@ -11,10 +11,8 @@ SHELL ["/bin/bash","-lc"]
 # 1) Install any component-specific system packages
 {% if apt_packages %}
 RUN apt-get update && apt-get install -y \
-{%- for pkg in apt_packages %}
-    {{ pkg }} \
-{%- endfor %} \
-  && rm -rf /var/lib/apt/lists/*
+{% for pkg in apt_packages %}    {{ pkg }} \
+{% endfor %}  && rm -rf /var/lib/apt/lists/*
 {% endif %}
 
 # 1b) Install any component-specific pip packages
@@ -80,15 +78,17 @@ RUN echo '=== Checking source directory structure ===' \
 RUN set -exo pipefail \
  && apt-get update \
  && source /opt/ros/$ROS_DISTRO/setup.bash \
- && source /ros_ws_common/install/setup.bash \
+ && if [ -f /ros_ws_common/install/setup.bash ]; then source /ros_ws_common/install/setup.bash; fi \
+ && (rosdep init 2>/dev/null || true) \
  && rosdep update \
  && echo '=== Checking what rosdep will install ===' \
- && rosdep keys --rosdistro $ROS_DISTRO --from-paths src --ignore-src | sort | uniq || echo 'No rosdep keys found' \
+ && (rosdep keys --rosdistro $ROS_DISTRO --from-paths src --ignore-src | sort | uniq || echo 'No rosdep keys found') \
  && echo '=== Installing dependencies ===' \
  && rosdep install --rosdistro $ROS_DISTRO --from-paths src --ignore-src -r -y
 
 # Sanity check
-RUN echo '=== Verifying dependencies ===' \
+RUN source /opt/ros/$ROS_DISTRO/setup.bash \
+ && echo '=== Verifying dependencies ===' \
  && rosdep check --rosdistro $ROS_DISTRO --from-paths src --ignore-src || true
 {% endif %}
 

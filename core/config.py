@@ -33,7 +33,15 @@ class Config:
         self.enable_dds_router = data.get('enable_dds_router', False)
         self.discovery_server = data.get('discovery_server', 'localhost')
 
-        
+        # Global container options
+        self.local           = data.get('local', False)
+        self.nvidia          = data.get('nvidia', False)
+        self.gui             = data.get('gui', False)
+
+        # Apt mirrors (None = use defaults)
+        self.apt_mirror      = data.get('apt_mirror', None)  # Ubuntu apt mirror
+        self.ros_apt_mirror  = data.get('ros_apt_mirror', None)  # ROS apt mirror
+
         # NEW: system‐level apt packages for the base image
         self.apt_packages    = data.get('apt_packages', [])
 
@@ -51,22 +59,27 @@ class Config:
         self.hosts = [Host(**h) for h in raw_hosts]
 
     @classmethod
-    def load(cls, project_root: str, validate: bool = True):
+    def load(cls, project_root: str, config_file: str = 'config.yaml', validate: bool = True):
         """
         Load and optionally validate configuration.
 
         Args:
             project_root: Path to project directory
+            config_file: Name or path to configuration file (default: 'config.yaml')
             validate: Run Pydantic validation (default: True)
 
         Returns:
             Config instance
 
         Raises:
-            FileNotFoundError: If config.yaml doesn't exist
+            FileNotFoundError: If configuration file doesn't exist
             ConfigurationError: If validation fails
         """
-        path = os.path.join(project_root, 'config.yaml')
+        # Support both absolute paths and relative paths
+        if os.path.isabs(config_file):
+            path = config_file
+        else:
+            path = os.path.join(project_root, config_file)
 
         # Run validation if requested
         if validate:
@@ -87,7 +100,7 @@ class Config:
 
         # Load YAML (even if validation ran, we still need to load for backward compatibility)
         if not os.path.isfile(path):
-            raise FileNotFoundError(f"config.yaml not found in {project_root}")
+            raise FileNotFoundError(f"Configuration file '{config_file}' not found at {path}")
 
         data = yaml.safe_load(open(path)) or {}
         return cls(data, project_root)
@@ -101,12 +114,8 @@ class Config:
         # Dynamically derived, no longer read from config.yaml
         return f"{self.registry}/{self.image_prefix}_base:{self.ros_distro}-{self.tag}"
 
-    def filter_components(self, name=None, simulate=None):
+    def filter_components(self, name=None):
         comps = self.components
         if name:
             comps = [c for c in comps if c.name == name]
-        if simulate is True:
-            comps = [c for c in comps if c.simulate]
-        elif simulate is False:
-            comps = [c for c in comps if not c.simulate]
         return comps

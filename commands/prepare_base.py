@@ -5,7 +5,6 @@ from core.docker import DockerHelper
 import os
 import sys
 import hashlib
-import json
 
 def compute_base_hash(cfg: Config, project_root: str) -> str:
     """Compute hash of base image inputs to detect changes."""
@@ -64,8 +63,8 @@ def save_base_hash(base_dir: str, hash_value: str):
     with open(hash_file, 'w') as f:
         f.write(hash_value)
 
-def prepare_base_main(project_root: str, force: bool = False):
-    cfg = Config.load(project_root)
+def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force: bool = False):
+    cfg = Config.load(project_root, config_file=config_file)
     tpl_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
     renderer = TemplateRenderer(tpl_dir)
     docker = DockerHelper()
@@ -90,6 +89,9 @@ def prepare_base_main(project_root: str, force: bool = False):
         ubuntu=ubuntu,
         common_pkgs=cfg.common_packages,
         workspace_dir=cfg.workspace_dir,
+        apt_packages=cfg.apt_packages,
+        apt_mirror=cfg.apt_mirror,
+        ros_apt_mirror=cfg.ros_apt_mirror,
     )
 
     base_tag = f"{cfg.registry}/{cfg.image_prefix}_base:{cfg.ros_distro}-{cfg.tag}"
@@ -109,7 +111,7 @@ def prepare_base_main(project_root: str, force: bool = False):
                 print(f"[prepare_base] Base image {base_tag} is up to date (cached)")
                 print(f"[prepare_base] Use 'stage --force-base' to rebuild")
                 return
-            except:
+            except Exception:
                 print(f"[prepare_base] Base config unchanged but image not found locally, rebuilding...")
         else:
             print(f"[prepare_base] Base configuration changed, rebuilding...")

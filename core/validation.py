@@ -31,6 +31,7 @@ class HostConfig(BaseModel):
     manager: bool = Field(False, description="DDS discovery server manager role")
     dds_ip: Optional[str] = Field(None, description="Secondary IP for DDS communication (defaults to ip if not set)")
     mount_root: Optional[str] = Field(None, description="Remote mount root directory for builds (defaults to /home/{user}/robocore-artifacts)")
+    build_on_device: bool = Field(False, description="Build components on this device instead of locally (faster for cross-arch builds)")
 
     @field_validator('port')
     @classmethod
@@ -143,7 +144,6 @@ class ComponentConfig(BaseModel):
     postinstall: List[str] = Field(default_factory=list, description="Post-install commands")
 
     # Advanced options
-    simulate: bool = Field(False, description="Simulation mode")
     workspace_dir: str = Field("ros_ws", description="Workspace directory name")
 
     # Performance optimizations
@@ -154,6 +154,15 @@ class ComponentConfig(BaseModel):
     runtime: Optional[str] = Field(None, description="Container runtime (e.g., 'nvidia')")
     gpu_count: Optional[int] = Field(None, description="Number of GPUs to allocate")
     gpu_device_ids: Union[List[str], str, None] = Field(default=None, description="Specific GPU device IDs")
+
+    # GPU and GUI options
+    nvidia: bool = Field(False, description="Enable NVIDIA GPU support")
+    gui: bool = Field(False, description="Enable X11/GUI forwarding")
+
+    # Additional container options
+    volumes: List[str] = Field(default_factory=list, description="Additional volume mounts")
+    stdin_open: bool = Field(False, description="Keep stdin open (docker -i)")
+    tty: bool = Field(False, description="Allocate pseudo-TTY (docker -t)")
 
     @field_validator('source', mode='before')
     @classmethod
@@ -204,10 +213,10 @@ class ComponentConfig(BaseModel):
         return self
 
     @model_validator(mode='after')
-    def validate_runs_on_for_real_components(self):
-        """Ensure non-simulated components specify runs_on."""
-        if not self.simulate and not self.runs_on:
-            raise ValueError(f"Component '{self.name}' must specify 'runs_on' (or set simulate: true)")
+    def validate_runs_on_required(self):
+        """Ensure components specify runs_on."""
+        if not self.runs_on:
+            raise ValueError(f"Component '{self.name}' must specify 'runs_on'")
         return self
 
 
@@ -236,6 +245,15 @@ class RobocoreConfig(BaseModel):
     # DDS configuration
     enable_dds_router: bool = Field(False, description="Enable DDS router")
     discovery_server: str = Field('localhost', description="Discovery server address")
+
+    # Global container options
+    local: bool = Field(False, description="Run all components locally instead of on remote hosts")
+    nvidia: bool = Field(False, description="Enable NVIDIA GPU support globally")
+    gui: bool = Field(False, description="Enable X11/GUI forwarding globally")
+
+    # Apt mirror configuration
+    apt_mirror: Optional[str] = Field(None, description="Custom Ubuntu apt mirror URL (e.g., 'http://mirrors.tuna.tsinghua.edu.cn/ubuntu')")
+    ros_apt_mirror: Optional[str] = Field(None, description="Custom ROS apt mirror URL (e.g., 'http://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu')")
 
     # System packages
     apt_packages: List[str] = Field(default_factory=list, description="System-level apt packages")

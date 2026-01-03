@@ -2,26 +2,17 @@
 import os
 import sys
 import getpass
-import subprocess
 import yaml
 from colorama import Fore
 
-CONFIG = "config.yaml"
-
-def sh(cmd: str):
-    print(f"$ {cmd}")
-    res = subprocess.run(cmd, shell=True)
-    if res.returncode:
-        sys.exit(f"[init] Command failed ({res.returncode}): {cmd}")
-
-def init_main(project_root: str):
+def init_main(project_root: str, config_file: str = 'config.yaml'):
     # 1) Prep root
     root = os.path.abspath(project_root)
     os.makedirs(root, exist_ok=True)
     os.chdir(root)
 
-    if os.path.exists(CONFIG):
-        print(Fore.RED + f"[init] {CONFIG} already exists, aborting.", file=sys.stderr)
+    if os.path.exists(config_file):
+        print(Fore.RED + f"[init] {config_file} already exists, aborting.", file=sys.stderr)
         sys.exit(1)
 
     print(Fore.CYAN + "Welcome to robocore-cli! Let's set up your project…")
@@ -65,7 +56,7 @@ def init_main(project_root: str):
         "components": []
     }
 
-    with open(CONFIG, "w") as f:
+    with open(config_file, "w") as f:
         yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
         # now append commented placeholders and usage hints
         f.write("\n")
@@ -132,4 +123,4 @@ def init_main(project_root: str):
         f.write("cache/\n")
         f.write("repos/\n")
 
-    print(Fore.GREEN + "[init] Scaffold complete; see config.yaml for placeholders.")
+    print(Fore.GREEN + f"[init] Scaffold complete; see {config_file} for placeholders.")

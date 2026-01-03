@@ -14,18 +14,24 @@ from core.validation import ConfigValidator
 from core.exceptions import ConfigurationError, SourceNotFoundError, ValidationError
 
 
-def validate_main(project_root: str):
+def validate_main(project_root: str, config_file: str = 'config.yaml'):
     """
     Validate robocore configuration.
 
     Args:
         project_root: Path to project directory
+        config_file: Name or path to configuration file (default: 'config.yaml')
 
     Returns:
         Exit code (0 for success, 1 for failure)
     """
     project_root = os.path.abspath(project_root)
-    config_path = os.path.join(project_root, 'config.yaml')
+
+    # Support both absolute paths and relative paths
+    if os.path.isabs(config_file):
+        config_path = config_file
+    else:
+        config_path = os.path.join(project_root, config_file)
 
     print(f"[validate] Checking configuration in {project_root}")
 

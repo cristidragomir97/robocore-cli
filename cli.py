@@ -9,9 +9,7 @@ from commands.init    import init_main
 from commands.stage   import stage_main
 from commands.build   import build_main
 from commands.deploy  import deploy_main
-from commands.shell   import shell_main
 from commands.prepare_base import prepare_base_main
-from commands.viz import viz_main
 from commands.clean import clean_main
 from commands.validate import validate_main
 from commands.stack import stack_main
@@ -27,21 +25,19 @@ def create_parser():
     )
     p.add_argument('-p','--project-root', dest='project_root',
                    help='Path to project root')
+    p.add_argument('-f','--config', dest='config_file', default='config.yaml',
+                   help='Path to configuration file (default: config.yaml)')
     p.add_argument('project_root_pos', nargs='?',
                    help=argparse.SUPPRESS)
 
     sp = p.add_subparsers(dest='command', required=True)
 
-
-    pv = sp.add_parser('viz', help='Launch local ROS2 GUI desktop (RViz, rqt) in a container')
-    pv.set_defaults(func=lambda args: viz_main(args.project_root))
-
-    pb = sp.add_parser('prepare-base', help='Build base ROS image')
-    pb.set_defaults(func=lambda args: prepare_base_main(args.project_root))
+    pp = sp.add_parser('prep', help='Build base ROS image')
+    pp.set_defaults(func=lambda args: prepare_base_main(args.project_root, config_file=args.config_file))
 
     # init
     pi = sp.add_parser('init', help='Bootstrap a new project')
-    pi.set_defaults(func=lambda args: init_main(args.project_root))
+    pi.set_defaults(func=lambda args: init_main(args.project_root, config_file=args.config_file))
 
     # stage (formerly prep)
     ps = sp.add_parser('stage', help='Generate multi-stage Dockerfiles & Compose')
@@ -53,7 +49,8 @@ def create_parser():
         project_root=args.project_root,
         component=args.component,
         refresh=args.refresh,
-        force_base=args.force_base
+        force_base=args.force_base,
+        config_file=args.config_file
     ))
 
     # build
@@ -62,35 +59,19 @@ def create_parser():
                     help='Only build this single component')
     pb.set_defaults(func=lambda args: build_main(
         project_root=args.project_root,
-        component=args.component
+        component=args.component,
+        config_file=args.config_file
     ))
 
-    # deploy
-    pd = sp.add_parser('deploy', help='Rsync builds & launch containers')
-    pd.add_argument('--simulate', action='store_true',
-                    help='Run only simulate:true services locally')
-    pd.add_argument('--host', default=None,
-                    help='Only deploy to this host (name from config.yaml)')
-    pd.set_defaults(func=lambda args: deploy_main(
+    # launch
+    pl = sp.add_parser('launch', help='Rsync builds & launch containers')
+    pl.add_argument('--host', default=None,
+                    help='Only launch on this host (name from config file)')
+    pl.set_defaults(func=lambda args: deploy_main(
         project_root=args.project_root,
-        simulate=args.simulate,
-        host_name=args.host
+        host_name=args.host,
+        config_file=args.config_file
     ))
-    # shell
-    pc = sp.add_parser(
-            'shell',
-            help='Open an interactive ROS2 shell for <component|common|path>'
-        )
-
-    pc.add_argument(
-            'target',
-            help='Either a component name, "common", or a path to a ros_ws folder'
-        )
-
-    pc.set_defaults(func=lambda args: shell_main(
-            target       = args.target,
-            project_root = args.project_root
-        ))
 
     # clean
     pcl = sp.add_parser('clean', help='Remove build artifacts and workspaces')
@@ -101,31 +82,24 @@ def create_parser():
     pcl.set_defaults(func=lambda args: clean_main(
         project_root=args.project_root,
         remote=args.remote and not args.local_only,
-        local=True
+        local=True,
+        config_file=args.config_file
     ))
 
     # validate
     pval = sp.add_parser('validate', help='Validate configuration without executing operations')
-    pval.set_defaults(func=lambda args: sys.exit(validate_main(project_root=args.project_root)))
+    pval.set_defaults(func=lambda args: sys.exit(validate_main(project_root=args.project_root, config_file=args.config_file)))
 
-    # stack
-    pstack = sp.add_parser('stack', help='Activate robostack environment with DDS configuration')
-    pstack.add_argument('-e', '--env', default='ros_env',
+    # pixi
+    ppixi = sp.add_parser('pixi', help='Activate robostack/pixi environment with DDS configuration')
+    ppixi.add_argument('-e', '--env', default='ros_env',
                         help='Name of the robostack environment (default: ros_env)')
 
-    # Package manager selection (mutually exclusive)
-    pm_group = pstack.add_mutually_exclusive_group()
-    pm_group.add_argument('--pixi', action='store_const', const='pixi', dest='package_manager',
-                          help='Use pixi package manager')
-    pm_group.add_argument('--mamba', action='store_const', const='mamba', dest='package_manager',
-                          help='Use mamba package manager')
-    pm_group.add_argument('--micromamba', action='store_const', const='micromamba', dest='package_manager',
-                          help='Use micromamba package manager')
-
-    pstack.set_defaults(func=lambda args: stack_main(
+    ppixi.set_defaults(func=lambda args: stack_main(
         project_root=args.project_root,
         env_name=args.env,
-        package_manager=args.package_manager
+        package_manager='pixi',
+        config_file=args.config_file
     ))
 
     return p

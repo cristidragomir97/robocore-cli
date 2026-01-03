@@ -3,8 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.claude/
+
 # Managed directory with build artifacts and temp files
 .robocore/
 
 # Mac OS stuff
 .DS_Store
+
+docs/

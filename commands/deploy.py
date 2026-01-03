@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 import os
 import sys
-import signal
+import platform
 from colorama import Fore
 from core.config import Config
-from core.docker import DockerHelper
+from core.docker import DockerHelper, is_localhost
 from core.sync   import SyncManager
 from core.models import Host
 from python_on_whales.exceptions import DockerException
 
-def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
-    cfg    = Config.load(project_root)
+def deploy_main(project_root: str, host_name: str = None, config_file: str = 'config.yaml'):
+    cfg    = Config.load(project_root, config_file=config_file)
     sync   = SyncManager(cfg)
     docker = DockerHelper()
 
@@ -20,6 +20,15 @@ def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
         if not host:
             sys.exit(f"[deploy] ERROR: Host '{host_name}' not found in config.")
         hosts = [host]
+
+    # Check for macOS-incompatible features
+    is_macos = platform.system() == 'Darwin'
+    if is_macos:
+        for comp in cfg.components:
+            if comp.nvidia:
+                print(Fore.YELLOW + f"[deploy] WARNING: Component '{comp.name}' has nvidia=true, but NVIDIA is not supported on macOS")
+            if comp.gui:
+                print(Fore.YELLOW + f"[deploy] WARNING: Component '{comp.name}' has gui=true, but GUI forwarding is not supported on macOS")
 
     for host in hosts:
         compose_filename = f"docker-compose.{host.name}.yaml"
@@ -32,8 +41,12 @@ def deploy_main(project_root: str, simulate: bool=False, host_name: str = None):
         # Filter components for this host
         host_components = [c for c in cfg.components if c.runs_on == host.name]
 
-        # Only sync builds for components that run on this host
-        sync.rsync_builds(project_root, host, host_components)
+        # Skip rsync for localhost - files are already local
+        if is_localhost(host):
+            print(f"[deploy:{host.name}] Localhost detected, skipping rsync (using local paths)")
+        else:
+            # Only sync builds for components that run on this host
+            sync.rsync_builds(project_root, host, host_components)
 
         # Pull component images on host
         for comp in host_components:

@@ -25,7 +25,7 @@ graph TB
         Init --> InitOutput[📁 Project Structure<br/>- packages/<br/>- common_packages/<br/>- .robocore-cli/<br/>- robot.yaml template]
 
         %% Prepare Base Phase
-        PrepareBase[🏗️ robocore-cli prepare-base]
+        PrepareBase[🏗️ robocore-cli prep]
         PrepareBase --> BaseImage[🐳 Base ROS Image<br/>+ Common Packages]
 
         %% Stage Phase
@@ -38,9 +38,9 @@ graph TB
         Build[🔨 robocore-cli build]
         Build --> LocalBuild[⚙️ Local Compilation<br/>- Copy source to build/<br/>- Run colcon build<br/>- Generate install/]
 
-        %% Deploy Phase
-        Deploy[🚀 robocore-cli deploy]
-        Deploy --> Sync[📡 Sync Builds<br/>rsync to remote hosts]
+        %% Launch Phase
+        Launch[🚀 robocore-cli launch]
+        Launch --> Sync[📡 Sync Builds<br/>rsync to remote hosts]
         Sync --> RemoteStart[▶️ Start Containers<br/>docker-compose up]
     end
 
@@ -79,8 +79,6 @@ graph TB
     %% Development Tools
     subgraph "Development Tools"
         direction TB
-        Shell[🐚 robocore-cli shell<br/>Interactive development]
-        Viz[👁️ robocore-cli viz<br/>RViz, rqt GUI tools]
         Connect[🔗 Remote debugging<br/>SSH into containers]
     end
 
@@ -104,8 +102,6 @@ graph TB
     RemoteDocker --> RemoteStart
 
     %% Development tools
-    Components --> Shell
-    Components --> Viz
     RemoteStart --> Connect
 
     %% Styling
@@ -115,11 +111,11 @@ graph TB
     classDef output fill:#e8f5e8
     classDef tools fill:#fce4ec
 
-    class User,Init,PrepareBase,Stage,Build,Deploy userAction
+    class User,Init,PrepareBase,Stage,Build,Launch userAction
     class CompAnalysis,DockerBuild,LocalBuild,Sync buildStep
     class DockerRegistry,LocalDocker,RemoteDocker,DDSServer infrastructure
     class BaseImage,ComposeGen,RemoteStart,InitOutput output
-    class Shell,Viz,Connect tools
+    class Connect tools
 ```
 
 ## Key Concepts
@@ -151,7 +147,7 @@ graph TB
 - Generates `robot.yaml` template with examples
 - Sets up managed directories (`.robocore-cli/`)
 
-### 2. Base Preparation (`prepare-base`)
+### 2. Base Preparation (`prep`)
 - Creates base ROS image for the specified distribution
 - Installs common packages shared across components
 - Optimizes build caching and layer reuse
@@ -169,7 +165,7 @@ graph TB
 - Outputs compiled artifacts to `build/` directory
 - Maintains separation between build and runtime environments
 
-### 5. Deployment (`deploy`)
+### 5. Launch (`launch`)
 - Syncs compiled builds to target hosts via rsync
 - Transfers docker-compose files
 - Launches containers remotely using Docker TCP API
@@ -205,7 +201,6 @@ Automatic setup of Fast DDS Discovery Server for robust multi-host communication
 - Eliminates multicast discovery limitations
 
 ### Development Tools
-- **Interactive Shells**: `robocore-cli shell` for component development
 - **Visualization**: GUI tools via VNC or local containers
 - **Remote Debugging**: Direct access to running containers
 

@@ -6,7 +6,7 @@ import subprocess
 from core.config import Config
 from core.docker import DockerHelper
 
-def clean_main(project_root: str, remote: bool = False, local: bool = True):
+def clean_main(project_root: str, remote: bool = False, local: bool = True, config_file: str = 'config.yaml'):
     """
     Clean build artifacts and managed workspaces.
 
@@ -14,9 +14,10 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
         project_root: Path to the project root
         remote: Clean remote hosts as well
         local: Clean local artifacts (default True)
+        config_file: Name or path to configuration file (default: 'config.yaml')
     """
     project_root = os.path.abspath(project_root)
-    cfg = Config.load(project_root)
+    cfg = Config.load(project_root, config_file=config_file)
     docker = DockerHelper()
 
     # Clean local .robocore directory
@@ -51,8 +52,9 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
                 if os.path.exists(compose_file):
                     print(f"[clean:{host.name}] Stopping containers...")
                     subprocess.run(
-                        f"ssh {host.user}@{host.ip} 'cd {mount_root} && docker compose -f docker-compose.{host.name}.yaml down 2>/dev/null || true'",
-                        shell=True
+                        ["ssh", f"{host.user}@{host.ip}",
+                         f"cd {mount_root} && docker compose -f docker-compose.{host.name}.yaml down 2>/dev/null || true"],
+                        check=False
                     )
             except Exception as e:
                 print(f"[clean:{host.name}] Warning: Failed to stop containers: {e}")
@@ -63,8 +65,11 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
             for comp in host_components:
                 img_tag = comp.image_tag(cfg)
                 try:
-                    cmd = f"ssh {host.user}@{host.ip} 'docker image rm -f {img_tag} 2>/dev/null || true'"
-                    subprocess.run(cmd, shell=True)
+                    subprocess.run(
+                        ["ssh", f"{host.user}@{host.ip}",
+                         f"docker image rm -f {img_tag} 2>/dev/null || true"],
+                        check=False
+                    )
                     print(f"[clean:{host.name}] ✓ Removed image: {img_tag}")
                 except Exception as e:
                     print(f"[clean:{host.name}] Warning: Failed to remove {img_tag}: {e}")
@@ -74,9 +79,9 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True):
 
             # Remove both mount_root and .robocore directories
             try:
-                cmd = f"ssh {host.user}@{host.ip} 'rm -rf {mount_root} {remote_robocore}'"
-                print(f"[clean:{host.name}] Running: {cmd}")
-                subprocess.run(cmd, shell=True, check=True)
+                cmd = ["ssh", f"{host.user}@{host.ip}", f"rm -rf {mount_root} {remote_robocore}"]
+                print(f"[clean:{host.name}] Running: {' '.join(cmd)}")
+                subprocess.run(cmd, check=True)
                 print(f"[clean:{host.name}] ✓ Removed {mount_root} and {remote_robocore}")
             except subprocess.CalledProcessError as e:
                 print(f"[clean:{host.name}] ERROR: Failed to clean remote: {e}")

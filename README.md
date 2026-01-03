@@ -49,24 +49,74 @@ It works like native ROS dev when you want speed, and like a deployment system w
 
 ---
 
+## 💻 Platform Notes
+
+###  macOS
+- Extremely fast cross-compilation for ARM64 devices (Jetson, RPi5) thanks to native ARM support
+- Docker runs inside a Linux VM, so **host networking is not available**
+- Hybrid computation graphs (mixing local ROS nodes with containerized ones) are **not supported**
+- GUI containers and simulations are **not supported**
+- For local development with GUI tools, use [robostack](https://robostack.github.io/). If there's a `pixi.toml` in your project, the `pixi` command initializes a pixi shell with your robot's DDS configuration injected
+
+### 🐧 Linux
+- Fully supported with all features (host networking, GUI, hybrid graphs)
+- ARM64 emulation on x86_64 is slow; set `build_on_device: true` on hosts to build natively on the target device
+- NVIDIA GPU passthrough works natively with the `nvidia` component option
+
+### WSL (Windows Subsystem for Linux)
+- Simulations and GUI apps work (with WSLg)
+- Hybrid computation graphs are **not supported** due to networking limitations
+
+---
+
 ## ⚙️ Configuration
 All of your robot’s components, hosts, deployment logic, and ROS metadata are defined in one centralized YAML file. This file is declarative, version-controllable, and reproducible.
 
-### 1. Basics 
-
+### 1. Global Configuration
 
 ```yaml
+# Required fields
+ros_distro: humble                    # ROS 2 distribution (humble, iron, jazzy)
+ros_domain_id: 0                      # ROS domain ID (0-232)
+registry: docker.io/dragomirxyz      # Docker registry URL
+image_prefix: myrobot                 # Docker image name prefix
 
-ros_distro: humble
-ros_domain_id: 0
-registry: docker.io/dragomirxyz
-image_prefix: lekiwiv2-arm64
+# Optional fields
+tag: latest                           # Docker image tag (default: latest)
+build_dir: .robocore/build           # Build output directory
+workspace_dir: ros_ws                 # ROS workspace directory name
+mount_root: /home/user/ros_builds    # Remote mount root for builds
+
+# Apt mirrors (for faster builds in certain regions)
+apt_mirror: http://mirrors.example.com/ubuntu           # Custom Ubuntu apt mirror
+ros_apt_mirror: http://mirrors.example.com/ros2/ubuntu  # Custom ROS apt mirror
+
+# Global apt packages (installed in base image)
+apt_packages:
+  - vim
+  - htop
+
+# DDS configuration
+enable_dds_router: false              # Enable DDS router container
+discovery_server: localhost           # Discovery server address
 ```
 
-* **ros_distro**: Which ROS 2 distribution you're targeting (e.g., humble, iron)
-* **ros_domain_id**: For isolating DDS domains in multi-robot systems
-* **registry**: Your Docker registry, local or remote
-* **image_prefix**: Namespacing for generated container images
+**Required fields:**
+* **ros_distro**: ROS 2 distribution (humble, iron, jazzy)
+* **ros_domain_id**: Domain ID for DDS isolation (0-232)
+* **registry**: Docker registry URL
+* **image_prefix**: Prefix for generated image names
+
+**Optional fields:**
+* **tag**: Docker image tag (default: `latest`)
+* **build_dir**: Local build output directory (default: `.robocore/build`)
+* **workspace_dir**: ROS workspace name (default: `ros_ws`)
+* **mount_root**: Remote directory for build artifacts
+* **apt_mirror**: Custom Ubuntu apt mirror URL for faster downloads
+* **ros_apt_mirror**: Custom ROS apt mirror URL
+* **apt_packages**: System packages to install in base image
+* **enable_dds_router**: Enable DDS router container
+* **discovery_server**: DDS discovery server address
 
 ### 2. Hosts - Define the Machines in Your System
 
@@ -76,12 +126,22 @@ hosts:
     ip: pi5.local
     user: user
     arch: arm64
+    port: 2375                        # Docker daemon port (default: 2375)
+    manager: true                     # DDS discovery server manager role
+    dds_ip: 192.168.1.100            # Secondary IP for DDS (defaults to ip)
+    mount_root: /home/user/builds    # Override global mount_root for this host
+    build_on_device: true            # Build on device (faster than emulation)
 ```
 
-* **name:** Internal reference for components
-* **ip:** Hostname or IP for deployment
-* **user:** SSH username for rsync and remote actions
-* **arch:** Architecture used for container cross-builds (amd64, arm64, etc.)
+* **name**: Unique identifier for this host
+* **ip**: Hostname or IP address for deployment
+* **user**: SSH username for rsync and remote actions
+* **arch**: Target architecture (amd64, arm64, armv7)
+* **port**: Docker daemon TCP port (default: 2375)
+* **manager**: Set to `true` to designate this host as the DDS discovery server
+* **dds_ip**: Alternative IP for DDS communication (useful for multi-NIC setups)
+* **mount_root**: Per-host override for build artifact directory
+* **build_on_device**: Set to `true` to build components on this device instead of locally (faster for cross-arch builds)
 
 
 ### 3. Common packages
@@ -134,14 +194,43 @@ components:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
 ```
 
-- **name**: The unique identifier for this component
+**Source configuration:**
+- **name**: Unique identifier for this component
 - **source/sources**: Local source paths for ROS packages
-- **runs_on**: Which host this component deploys to
-- **entrypoint**: What command runs at container start **(optional)**
-- **devices**: Which devices to expose (e.g., /dev/ttyUSB0) **(optional)**
-- **apt_packages**: List of apt packages you want to install **(optional)**
-- **repositories**: Define dependencies declaratively using the standard vcstool format **(optional)**
-- **postinstall**: Commands to run after installing dependencies **(optional)**
+- **runs_on**: Target host name (required)
+
+**Dependencies:**
+- **repositories**: VCS repositories in vcstool format
+- **apt_packages**: System packages to install
+- **pip_packages**: Python packages to install
+
+**Runtime:**
+- **entrypoint**: Container startup command
+- **launch_args**: Arguments for entrypoint
+- **environment**: Environment variables as key-value pairs
+
+**Hardware:**
+- **devices**: Device mappings (e.g., `/dev/ttyUSB0:/dev/ttyUSB0`)
+- **ports**: Port mappings (e.g., `8080:80`)
+
+**Build hooks:**
+- **preinstall**: Commands to run before installing dependencies
+- **postinstall**: Commands to run after installing dependencies
+
+**Container options:**
+- **privileged**: Run in privileged mode (default: false)
+- **runtime**: Container runtime (e.g., `nvidia`)
+- **nvidia**: Enable NVIDIA GPU support (default: false)
+- **gpu_count**: Number of GPUs to allocate
+- **gpu_device_ids**: Specific GPU device IDs
+- **volumes**: Additional volume mounts
+- **stdin_open**: Keep stdin open (default: false)
+- **tty**: Allocate pseudo-TTY (default: false)
+
+**Performance:**
+- **shm_size**: Shared memory size (e.g., `2g`)
+- **ipc_mode**: IPC mode (e.g., `host`)
+- **cpuset**: CPU pinning (e.g., `0-3`)
 
 #### b. External Pre-Built Image
 
@@ -198,9 +287,9 @@ See [docs/external-images.md](docs/external-images.md) for detailed examples and
 
 ---
 
-### prepare-base
+### prep
 
-**Command**: `robocore-cli <project_folder> prepare-base`
+**Command**: `robocore-cli <project_folder> prep`
 
 **Description**: Creates a base image with the **ros_distro** and including the common_packages. Make sure you re-run this everytime you add a new common package. 
 
@@ -240,53 +329,14 @@ For components using `image` or `build` fields, the stage step handles their Doc
 
 ---
 
-### sync
+### launch
 
-**Command**: `robocore-cli <project_folder> sync`
+**Command**: `robocore-cli <project_folder> launch`
 
-**Description**:  The sync step transfers the compiled components and runtime files from the local machine to the target robot(s). It ensures the robot runs the latest code without needing to rebuild anything on the device, making iteration fast and deployment lightweight. During this step, for every component assigned to a host:
-
-
-* The install tree (built during the build step) and any necessary runtime files are prepared for transfer.
-* Using rsync, only changed files are copied to the target robot, minimizing bandwidth and time.
-
----
-
-### run 
-
-
-**Command**: `robocore-cli <project_folder> run`
-
-**Description**: This command connects to the docker daemon on each one of the hosts and launches the appropiate containers.  
+**Description**: Syncs compiled components to target hosts and launches containers. This command transfers only changed files using rsync (for remote hosts) and starts the appropriate containers on each host.
 
 **Flags**:
-- `--host <name>`: There are siuations where we only want to start/restart the containers on one of the hosts. 
-
----
-
-### shell
-
-**Command**: `robocore-cli <project_folder> shell --component <name>`
-
-**Description**: Launches an interactive local development shell inside a container for the specified component. This is ideal for generating packages, running ROS tools, or experimenting within a fully provisioned ROS environment that mirrors your deployment image.
-* A local container is started using the component's staged image.
-* The component’s source folder (e.g., components/<name>) is mounted into the container.
-* The full ROS environment is sourced and ready for immediate use.
-* This shell runs entirely on your development machine and does not affect or interact with any deployed robot containers.
-
-**Flags**:
-- `--component <name>`: The component to open the local shell for (required).
----
-
-### connect
-**Command**: `robocore-cli <project_folder> connect --component <name>`
-
-**Description**: Opens an interactive shell inside the running container of a specified component on a remote robot. This is useful for debugging, inspecting runtime logs, or manually testing commands in the live environment. During this step:
-* An interactive shell is started inside the live container on the host it belongs to, with ROS fully sourced.
-* This shell connects directly to the deployed robot environment and is best used for runtime introspection—not for editing code or modifying container contents persistently.
-
-**Flags**:
-- `--component <name>`: The name of the component to connect to (required).
+- `--host <name>`: Only launch on this specific host (name from config file).
 
 ---
 
@@ -422,7 +472,7 @@ Then re-run:
 ```yaml
 robocore-cli stage
 robocore-cli build
-robocore-cli sync
+robocore-cli launch
 ```
 
 The tool will:
