@@ -131,6 +131,7 @@ def stack_main(project_root: Optional[str] = None, env_name: str = "ros_env", pa
         config_file: Name or path to configuration file (default: 'config.yaml')
         env_name: Name of the robostack environment (default: "ros_env")
         package_manager: Explicitly specified package manager (micromamba, mamba, or pixi)
+        config_file: Name or path to configuration file (default: 'config.yaml')
     """
     print(Fore.CYAN + "[stack] Initializing robostack environment...")
 

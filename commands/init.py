@@ -2,15 +2,8 @@
 import os
 import sys
 import getpass
-import subprocess
 import yaml
 from colorama import Fore
-
-def sh(cmd: str):
-    print(f"$ {cmd}")
-    res = subprocess.run(cmd, shell=True)
-    if res.returncode:
-        sys.exit(f"[init] Command failed ({res.returncode}): {cmd}")
 
 def init_main(project_root: str, config_file: str = 'config.yaml'):
     # 1) Prep root

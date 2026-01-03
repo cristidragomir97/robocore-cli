@@ -14,6 +14,12 @@ services:
   {{ comp.name }}:
     image: {{ comp.image }}
     network_mode: host
+    {% if comp.stdin_open %}
+    stdin_open: true
+    {% endif %}
+    {% if comp.tty %}
+    tty: true
+    {% endif %}
     {% if comp.privileged %}
     privileged: true
     {% endif %}
@@ -28,19 +34,19 @@ services:
       {% if comp.mount_shm %}
       - "/dev/shm:/dev/shm:rw"
       {% endif %}
-      {% if gui or comp.gui %}
+      {% if comp.gui %}
+      {% if is_macos %}
+      # macOS: X11 forwarding via XQuartz socket
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      {% else %}
+      # Linux: X11 socket mount
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       - "${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro"
+      {% endif %}
       {% endif %}
       {% for vol in comp.volumes %}
       - "{{ vol }}"
       {% endfor %}
-    {% endif %}
-    {% if comp.stdin_open %}
-    stdin_open: true
-    {% endif %}
-    {% if comp.tty %}
-    tty: true
     {% endif %}
     {% if comp.devices %}
     devices:
@@ -79,11 +85,25 @@ services:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
       - ROS_DISCOVERY_SERVER={{ discovery_server }}
+<<<<<<< HEAD
       {% if gui or comp.gui %}
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       {% endif %}
       {% if nvidia or comp.nvidia %}
+=======
+      {% if comp.gui %}
+      {% if is_macos %}
+      # macOS: Use host.docker.internal for XQuartz
+      - DISPLAY=host.docker.internal:0
+      {% else %}
+      # Linux: Use host DISPLAY
+      - DISPLAY=${DISPLAY}
+      {% endif %}
+      - QT_X11_NO_MITSHM=1
+      {% endif %}
+      {% if comp.nvidia %}
+>>>>>>> 3a6372b (added local build)
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       {% endif %}
@@ -99,7 +119,11 @@ services:
     {% if comp.cpuset %}
     cpuset: "{{ comp.cpuset }}"
     {% endif %}
+<<<<<<< HEAD
     {% if nvidia or comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
+=======
+    {% if comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
+>>>>>>> 3a6372b (added local build)
     deploy:
       resources:
         reservations:

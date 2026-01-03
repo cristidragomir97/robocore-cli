@@ -4,10 +4,13 @@ import sys
 import shutil
 import yaml
 import platform
+import subprocess
 from typing import Optional, List, Tuple
 
 from python_on_whales import DockerClient
+from colorama import Fore
 from core.config   import Config
+from core.docker   import is_localhost
 from core.models   import Component, Host
 
 def get_host_arch() -> str:
@@ -59,12 +62,80 @@ def resolve_source_packages(comp: Component, cfg: Config) -> List[Tuple[str, str
 
     return packages
 
+def build_on_remote(comp: Component, cfg: Config, host: Host, source_packages: List[Tuple[str, str]]):
+    """
+    Build a component on a remote host.
+    1) Rsync source packages to remote host
+    2) Run docker build command via SSH
+    3) Leave build artifacts on remote (used by launch)
+    """
+    comp_name = comp.name
+    remote_build_root = f"{host.effective_mount_root}/{comp_name}/{cfg.workspace_dir}"
+    remote_src = f"{remote_build_root}/src"
+
+    print(f"[build:{comp_name}] Building on device {host.name} ({host.ip})")
+
+    # Create remote directory structure
+    ssh_prefix = f"{host.user}@{host.ip}"
+    subprocess.run(
+        ["ssh", ssh_prefix, f"mkdir -p {remote_src}"],
+        check=True
+    )
+
+    # Rsync each source package to remote
+    print(f"[build:{comp_name}] Syncing {len(source_packages)} packages to {host.name}...")
+    for abs_source, pkg_name in source_packages:
+        remote_dest = f"{ssh_prefix}:{remote_src}/{pkg_name}/"
+        subprocess.run(
+            ["rsync", "-az", "--delete", "-e", "ssh", f"{abs_source}/", remote_dest],
+            check=True
+        )
+        print(f"  - synced {pkg_name}")
+
+    # Build command
+    post_hooks = comp.postinstall or []
+    cmds = [
+        "source /opt/ros/$ROS_DISTRO/setup.bash",
+        "colcon build --symlink-install --install-base install"
+    ]
+    for p in post_hooks:
+        cmds.append(
+            "source /opt/ros/$ROS_DISTRO/setup.bash && "
+            "source /ros_ws/install/setup.bash && "
+            f"{p}"
+        )
+    full_cmd = " && ".join(cmds)
+
+    # Run build via remote Docker
+    image = comp.image_tag(cfg)
+    docker_url = f"tcp://{host.ip}:{host.port}"
+
+    print(f"[build:{comp_name}] Running build on {host.name}...")
+    docker_cmd = [
+        "docker", "-H", docker_url, "run", "--rm",
+        "-v", f"{remote_build_root}:/ros_ws:rw",
+        "-w", "/ros_ws",
+        "-e", f"ROS_DISTRO={cfg.ros_distro}",
+        image,
+        "bash", "-lc", full_cmd
+    ]
+
+    result = subprocess.run(docker_cmd)
+    if result.returncode != 0:
+        print(Fore.RED + f"[build:{comp_name}] Build failed on {host.name}")
+        sys.exit(1)
+
+    print(Fore.GREEN + f"[build:{comp_name}] Done (artifacts at {host.name}:{remote_build_root}/install)")
+
+
 def build_main(project_root: str, component: Optional[str] = None, config_file: str = 'config.yaml'):
     """
     For each component that has local source packages:
       1) Copy sources → build/<comp>/ros_ws/src
       2) Run any postinstall hooks
       3) Invoke the builder image (already staged) to colcon build → install
+
+    If the target host has build_on_device=true, the build runs on the remote device.
     """
     # 1) chdir into project
     project_root = os.path.abspath(project_root)
@@ -73,6 +144,7 @@ def build_main(project_root: str, component: Optional[str] = None, config_file: 
     # 2) load config & pick components
     cfg   = Config.load(project_root, config_file=config_file)
     docker = DockerClient()
+    hosts_map = {h.name: h for h in cfg.hosts}
     comps = cfg.filter_components(name=component)
     hosts_map = {h.name: h for h in cfg.hosts}
     host_arch = get_host_arch()
@@ -85,6 +157,16 @@ def build_main(project_root: str, component: Optional[str] = None, config_file: 
 
     # 3) loop
     for comp in comps:
+        # Check if this component's host wants on-device builds
+        host = hosts_map.get(comp.runs_on)
+        if host and host.build_on_device and not is_localhost(host):
+            # Resolve source packages
+            source_packages = resolve_source_packages(comp, cfg)
+            if not source_packages:
+                print(f"[build] Skipping '{comp.name}' (no source packages found)")
+                continue
+            build_on_remote(comp, cfg, host, source_packages)
+            continue
         comp_name = comp.name
 
         # Resolve source packages

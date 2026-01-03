@@ -5,7 +5,6 @@ from core.docker import DockerHelper
 import os
 import sys
 import hashlib
-import json
 
 def compute_base_hash(cfg: Config, project_root: str) -> str:
     """Compute hash of base image inputs to detect changes."""
@@ -90,6 +89,9 @@ def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force
         ubuntu=ubuntu,
         common_pkgs=cfg.common_packages,
         workspace_dir=cfg.workspace_dir,
+        apt_packages=cfg.apt_packages,
+        apt_mirror=cfg.apt_mirror,
+        ros_apt_mirror=cfg.ros_apt_mirror,
     )
 
     base_tag = f"{cfg.registry}/{cfg.image_prefix}_base:{cfg.ros_distro}-{cfg.tag}"
@@ -109,7 +111,7 @@ def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force
                 print(f"[prepare_base] Base image {base_tag} is up to date (cached)")
                 print(f"[prepare_base] Use 'stage --force-base' to rebuild")
                 return
-            except:
+            except Exception:
                 print(f"[prepare_base] Base config unchanged but image not found locally, rebuilding...")
         else:
             print(f"[prepare_base] Base configuration changed, rebuilding...")

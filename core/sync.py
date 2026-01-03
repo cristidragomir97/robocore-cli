@@ -56,18 +56,16 @@ class SyncManager:
 
                 # Create directory and ensure proper ownership
                 remote_dir = f"{mount_root}/{comp.name}/{self.workspace_dir}"
-                setup_cmd = (
-                    f"ssh {host.user}@{host.ip} '"
-                    f" mkdir -p {remote_dir} && "
-                    f" chown -R {host.user}:{host.user} {mount_root}"
-                    f"'"
-                )
+                setup_cmd = [
+                    "ssh", f"{host.user}@{host.ip}",
+                    f"mkdir -p {remote_dir} && chown -R {host.user}:{host.user} {mount_root}"
+                ]
                 print(f"[sync] Setting up remote directory: {remote_dir}")
-                subprocess.run(setup_cmd, shell=True, check=True)
+                subprocess.run(setup_cmd, check=True)
 
-                cmd = (
-                    f"rsync -az --inplace --no-whole-file --delete "
-                    f"-e ssh {src} {dst}"
-                )
-                print(f"[sync] {host.name}: {cmd}")
-                subprocess.run(cmd, shell=True, check=True)
+                cmd = [
+                    "rsync", "-az", "--inplace", "--no-whole-file", "--delete",
+                    "-e", "ssh", src, dst
+                ]
+                print(f"[sync] {host.name}: {' '.join(cmd)}")
+                subprocess.run(cmd, check=True)

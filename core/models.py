@@ -13,6 +13,7 @@ class Host:
     manager: bool = False
     dds_ip: Optional[str] = None  # Secondary IP for DDS communication
     mount_root: Optional[str] = None  # Remote mount root directory
+    build_on_device: bool = False  # Build components on this device instead of locally
 
     @property
     def effective_dds_ip(self) -> str:
@@ -100,7 +101,6 @@ class Component:
     repositories: List[RepositorySpec] = field(default_factory=list)
     apt_packages: List[str] = field(default_factory=list)
     pip_packages: List[str] = field(default_factory=list)
-    simulate: bool = False
     workspace_dir: str = "ros_ws"  # Configurable workspace directory name
     # Performance optimisations
     shm_size: Optional[str] = None     # e.g., "512m"
@@ -116,6 +116,15 @@ class Component:
     gpu_device_ids: List[str] = field(default_factory=list)  # Specific GPU IDs (e.g., ["0", "1"])
     nvidia: bool = False               # Enable NVIDIA GPU support
     gui: bool = False                  # Enable X11 GUI forwarding
+    volumes: List[str] = field(default_factory=list)  # Additional volume mounts
+    stdin_open: bool = False           # Keep stdin open (docker -i)
+    tty: bool = False                  # Allocate pseudo-TTY (docker -t)
+
+    # GPU and GUI options
+    nvidia: bool = False               # Enable NVIDIA GPU support
+    gui: bool = False                  # Enable X11/GUI forwarding
+
+    # Additional container options
     volumes: List[str] = field(default_factory=list)  # Additional volume mounts
     stdin_open: bool = False           # Keep stdin open (docker -i)
     tty: bool = False                  # Allocate pseudo-TTY (docker -t)
@@ -181,6 +190,15 @@ class Component:
         stdin_open = d.get('stdin_open', False)
         tty = d.get('tty', False)
 
+        # Parse GPU and GUI options
+        nvidia = d.get('nvidia', False)
+        gui = d.get('gui', False)
+
+        # Parse additional container options
+        volumes = d.get('volumes', [])
+        stdin_open = d.get('stdin_open', False)
+        tty = d.get('tty', False)
+
         return cls(
             name        = d['name'],
             sources     = sources,
@@ -196,7 +214,6 @@ class Component:
             preinstall  = d.get('preinstall', []),
             postinstall = d.get('postinstall', []),
             repositories= repos,
-            simulate    = d.get('simulate', False),
             apt_packages= d.get('apt_packages', []),
             pip_packages= d.get('pip_packages', []),
             runs_on     = d.get('runs_on', None),

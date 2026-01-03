@@ -1,6 +1,12 @@
 # core/renderer.py
 import os
+import platform
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+
+def is_macos() -> bool:
+    """Check if running on macOS."""
+    return platform.system() == 'Darwin'
 
 class TemplateRenderer:
     def __init__(self, template_dir: str):
@@ -95,11 +101,23 @@ class TemplateRenderer:
             is_localhost  = is_localhost,
             nvidia        = cfg.nvidia,
             gui           = cfg.gui
+            is_macos      = is_macos(),
+            is_localhost  = is_localhost
         )
 
-    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = []):
+    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = [], apt_mirror: str = None, ros_apt_mirror: str = None):
             """
             Render Dockerfile.base.j2 → out_path
+
+            Args:
+                out_path: Output file path
+                ros_distro: ROS distribution (e.g., 'humble')
+                ubuntu: Ubuntu release (e.g., 'jammy')
+                common_pkgs: List of common packages
+                workspace_dir: Workspace directory name
+                apt_packages: System apt packages to install
+                apt_mirror: Custom Ubuntu apt mirror URL (optional)
+                ros_apt_mirror: Custom ROS apt mirror URL (optional)
             """
             self.render(
                 "Dockerfile.base.j2",
@@ -108,5 +126,7 @@ class TemplateRenderer:
                 ubuntu       = ubuntu,
                 common_pkgs  = common_pkgs,
                 workspace_dir= workspace_dir,
-                apt_packages = apt_packages or []
+                apt_packages = apt_packages or [],
+                apt_mirror   = apt_mirror,
+                ros_apt_mirror = ros_apt_mirror
             )

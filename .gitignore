@@ -3,11 +3,21 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Build and distribution
+build/
+dist/
+*.egg
+*.egg-info/
+.eggs/
+
 # Managed directory with build artifacts and temp files
 .robocore/
 
 # Mac OS stuff
 .DS_Store
-.venv
-.claude
-robocore_cli.egg-info
+
+# Virtual environment
+.venv/
+
+# Claude
+.claude/

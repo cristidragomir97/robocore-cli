@@ -35,10 +35,14 @@ class Config:
         self.discovery_server = data.get('discovery_server', 'localhost')
 
         # Global container options
-        self.nvidia = data.get('nvidia', False)
-        self.gui = data.get('gui', False)
+        self.local           = data.get('local', False)
+        self.nvidia          = data.get('nvidia', False)
+        self.gui             = data.get('gui', False)
 
-        
+        # Apt mirrors (None = use defaults)
+        self.apt_mirror      = data.get('apt_mirror', None)  # Ubuntu apt mirror
+        self.ros_apt_mirror  = data.get('ros_apt_mirror', None)  # ROS apt mirror
+
         # NEW: system‐level apt packages for the base image
         self.apt_packages    = data.get('apt_packages', [])
 
@@ -111,12 +115,8 @@ class Config:
         # Dynamically derived, no longer read from config.yaml
         return f"{self.registry}/{self.image_prefix}_base:{self.ros_distro}-{self.tag}"
 
-    def filter_components(self, name=None, simulate=None):
+    def filter_components(self, name=None):
         comps = self.components
         if name:
             comps = [c for c in comps if c.name == name]
-        if simulate is True:
-            comps = [c for c in comps if c.simulate]
-        elif simulate is False:
-            comps = [c for c in comps if not c.simulate]
         return comps
