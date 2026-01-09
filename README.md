@@ -25,8 +25,48 @@ It helps you structure your robot software as modular components, run them acros
 - **One configuration = one robot**  
   All hosts, components, packages, and system structure live in a single declarative file: `robot.yaml`.
 
-- **Native-speed dev, container-grade consistency**  
+- **Native-speed dev, container-grade consistency**
   Enjoy the benefits of Docker without losing ROS tooling, hardware access, or real-time testing.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Docker
+- pip
+
+### Install from source
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/robocore-cli.git
+cd robocore-cli
+
+# Create a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install the package
+pip install .
+```
+
+After installation, the `robocore` command will be available in your PATH:
+
+```bash
+robocore --help
+```
+
+### Development installation
+
+For development, install in editable mode so changes take effect immediately:
+
+```bash
+pip install -e .
+```
+
 ---
 ## 🛠️ How it works
 

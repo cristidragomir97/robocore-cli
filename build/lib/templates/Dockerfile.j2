@@ -1,0 +1,100 @@
+# ─── Component Builder ─────────────────────────────────────────────────────
+FROM {{ base_image }}
+
+ENV PYTHONDONTWRITEBYTECODE=1
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO={{ ros_distro }}
+SHELL ["/bin/bash","-lc"]
+#ENV ROS_WS=/ros_ws
+
+# 1) Install any component-specific system packages
+{% if apt_packages %}
+RUN apt-get update && apt-get install -y \
+{%- for pkg in apt_packages %}
+    {{ pkg }} \
+{%- endfor %} \
+  && rm -rf /var/lib/apt/lists/*
+{% endif %}
+
+# 1b) Install any component-specific pip packages
+{% if pip_packages %}
+RUN pip3 install --no-cache-dir {% if ros_distro == 'jazzy' %}--break-system-packages {% endif %} {{ pip_packages | join(' ') }}
+{% endif %}
+
+# 2) VCS repos → build into /vcs_ws/install
+{% if has_repos %}
+
+# ─── Ensure workspace exists ──────────────────────────────────────────────
+RUN mkdir -p /vcs_ws/src
+
+# ─── Import repos.yaml ────────────────────────────────────────────────────
+COPY {{ repos_file }} /vcs_ws/repos.yaml
+
+# Install vcstool if needed
+RUN apt-get update && apt-get install -y python3-vcstool && rm -rf /var/lib/apt/lists/*
+
+# Import VCS repositories
+RUN vcs import /vcs_ws/src < /vcs_ws/repos.yaml
+
+# ─── Build workspace ──────────────────────────────────────────────────────
+WORKDIR /vcs_ws
+RUN apt-get update \
+ && source /opt/ros/$ROS_DISTRO/setup.bash \
+ && rosdep init || true \
+ && rosdep update \
+ && rosdep install --from-paths src --ignore-src -y \
+ && colcon build --symlink-install --event-handlers console_direct+
+
+# ─── Optional: Validate build success ─────────────────────────────────────
+
+{% if postinstall %}
+# ─── VCS Postinstall Hooks ────────────────────────────────────────────────
+{% for cmd in postinstall %}
+RUN source /opt/ros/$ROS_DISTRO/setup.bash \
+ && source /vcs_ws/install/setup.bash \
+ && {{ cmd }}
+{% endfor %}
+{% endif %}
+
+{% endif %}
+
+
+# 3) Copy & prepare any local source
+{% if source_packages %}
+WORKDIR /ros_ws
+RUN mkdir -p src
+
+# Copy source packages directly from their original locations
+{% for src_path, pkg_name in source_packages %}
+COPY {{ src_path }} /ros_ws/src/{{ pkg_name }}
+{% endfor %}
+
+# Verify we have actual files
+RUN echo '=== Checking source directory structure ===' \
+ && ls -la src/ \
+ && echo '=== Found package.xml files ===' \
+ && find src -type f -name package.xml -exec echo '{}' \;
+
+# Install dependencies
+RUN set -exo pipefail \
+ && apt-get update \
+ && source /opt/ros/$ROS_DISTRO/setup.bash \
+ && source /ros_ws_common/install/setup.bash \
+ && rosdep update \
+ && echo '=== Checking what rosdep will install ===' \
+ && rosdep keys --rosdistro $ROS_DISTRO --from-paths src --ignore-src | sort | uniq || echo 'No rosdep keys found' \
+ && echo '=== Installing dependencies ===' \
+ && rosdep install --rosdistro $ROS_DISTRO --from-paths src --ignore-src -r -y
+
+# Sanity check
+RUN echo '=== Verifying dependencies ===' \
+ && rosdep check --rosdistro $ROS_DISTRO --from-paths src --ignore-src || true
+{% endif %}
+
+
+# DDS Discovery Server config
+COPY {{ superclient_path }} /superclient.xml
+ENV FASTRTPS_DEFAULT_PROFILES_FILE=/superclient.xml
+ENV ROS_DISCOVERY_SERVER={{ dds_server_ip }}:11811
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp

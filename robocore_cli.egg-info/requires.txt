@@ -1,0 +1,12 @@
+python-on-whales>=0.59.0
+PyYAML>=6.0
+Jinja2>=3.1.0
+click>=8.0.0
+colorama>=0.4.6
+pydantic>=2.0.0
+
+[test]
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
