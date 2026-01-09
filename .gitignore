@@ -8,3 +8,6 @@ __pycache__/
 
 # Mac OS stuff
 .DS_Store
+.venv
+.claude
+robocore_cli.egg-info
