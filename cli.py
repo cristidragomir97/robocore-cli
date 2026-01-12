@@ -8,11 +8,11 @@ from colorama import init as colorama_init, Fore
 from commands.init    import init_main
 from commands.stage   import stage_main
 from commands.build   import build_main
-from commands.deploy  import deploy_main
+from commands.launch  import launch_main
 from commands.prepare_base import prepare_base_main
 from commands.clean import clean_main
 from commands.validate import validate_main
-from commands.stack import stack_main
+from commands.pixi import pixi_main
 from core.exceptions import RobocoreError, ConfigurationError, ValidationError
 from python_on_whales.exceptions import DockerException
 import subprocess
@@ -67,7 +67,7 @@ def create_parser():
     pl = sp.add_parser('launch', help='Rsync builds & launch containers')
     pl.add_argument('--host', default=None,
                     help='Only launch on this host (name from config file)')
-    pl.set_defaults(func=lambda args: deploy_main(
+    pl.set_defaults(func=lambda args: launch_main(
         project_root=args.project_root,
         host_name=args.host,
         config_file=args.config_file
@@ -95,10 +95,9 @@ def create_parser():
     ppixi.add_argument('-e', '--env', default='ros_env',
                         help='Name of the robostack environment (default: ros_env)')
 
-    ppixi.set_defaults(func=lambda args: stack_main(
+    ppixi.set_defaults(func=lambda args: pixi_main(
         project_root=args.project_root,
         env_name=args.env,
-        package_manager='pixi',
         config_file=args.config_file
     ))
 

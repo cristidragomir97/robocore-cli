@@ -9,7 +9,7 @@ from core.sync   import SyncManager
 from core.models import Host
 from python_on_whales.exceptions import DockerException
 
-def deploy_main(project_root: str, host_name: str = None, config_file: str = 'config.yaml'):
+def launch_main(project_root: str, host_name: str = None, config_file: str = 'config.yaml'):
     cfg    = Config.load(project_root, config_file=config_file)
     sync   = SyncManager(cfg)
     docker = DockerHelper()
@@ -18,7 +18,7 @@ def deploy_main(project_root: str, host_name: str = None, config_file: str = 'co
     if host_name:
         host = next((h for h in hosts if h.name == host_name), None)
         if not host:
-            sys.exit(f"[deploy] ERROR: Host '{host_name}' not found in config.")
+            sys.exit(f"[launch] ERROR: Host '{host_name}' not found in config.")
         hosts = [host]
 
     # Check for macOS-incompatible features
@@ -26,16 +26,16 @@ def deploy_main(project_root: str, host_name: str = None, config_file: str = 'co
     if is_macos:
         for comp in cfg.components:
             if comp.nvidia:
-                print(Fore.YELLOW + f"[deploy] WARNING: Component '{comp.name}' has nvidia=true, but NVIDIA is not supported on macOS")
+                print(Fore.YELLOW + f"[launch] WARNING: Component '{comp.name}' has nvidia=true, but NVIDIA is not supported on macOS")
             if comp.gui:
-                print(Fore.YELLOW + f"[deploy] WARNING: Component '{comp.name}' has gui=true, but GUI forwarding is not supported on macOS")
+                print(Fore.YELLOW + f"[launch] WARNING: Component '{comp.name}' has gui=true, but GUI forwarding is not supported on macOS")
 
     for host in hosts:
         compose_filename = f"docker-compose.{host.name}.yaml"
         compose_path = os.path.join(project_root, compose_filename)
         print(compose_path)
         if not os.path.exists(compose_path):
-            print(f"[deploy:{host.name}] WARNING: Compose file '{compose_filename}' not found, skipping.")
+            print(f"[launch:{host.name}] WARNING: Compose file '{compose_filename}' not found, skipping.")
             continue
 
         # Filter components for this host
@@ -43,7 +43,7 @@ def deploy_main(project_root: str, host_name: str = None, config_file: str = 'co
 
         # Skip rsync for localhost - files are already local
         if is_localhost(host):
-            print(f"[deploy:{host.name}] Localhost detected, skipping rsync (using local paths)")
+            print(f"[launch:{host.name}] Localhost detected, skipping rsync (using local paths)")
         else:
             # Only sync builds for components that run on this host
             sync.rsync_builds(project_root, host, host_components)
@@ -51,18 +51,18 @@ def deploy_main(project_root: str, host_name: str = None, config_file: str = 'co
         # Pull component images on host
         for comp in host_components:
             image = comp.image_tag(cfg)
-            print(f"[deploy:{host.name}] Pulling {image}...")
+            print(f"[launch:{host.name}] Pulling {image}...")
             try:
                 docker.pull_image_on_host(host, image)
             except DockerException:
-                print(Fore.RED + f"[deploy:{host.name}] Failed to pull image on host '{host.name}' ({host.ip})", file=sys.stderr)
+                print(Fore.RED + f"[launch:{host.name}] Failed to pull image on host '{host.name}' ({host.ip})", file=sys.stderr)
                 raise
 
-        print(f"[deploy:{host.name}] Synced builds & compose. Launching containers...")
+        print(f"[launch:{host.name}] Synced builds & compose. Launching containers...")
         try:
             docker.compose_up_remote(host, compose_path)
         except KeyboardInterrupt:
-            print(f"\n[deploy:{host.name}] Interrupted by user. Containers may still be running.")
-            print(f"[deploy:{host.name}] To stop: docker compose -f {compose_filename} down")
+            print(f"\n[launch:{host.name}] Interrupted by user. Containers may still be running.")
+            print(f"[launch:{host.name}] To stop: docker compose -f {compose_filename} down")
             sys.exit(130)  # Standard exit code for SIGINT
-    print("[deploy] All services started (check terminal outputs).")
+    print("[launch] All services started (check terminal outputs).")
