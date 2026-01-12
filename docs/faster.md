@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Analysis of robocore-cli reveals significant performance bottlenecks in the Docker image build/push/pull workflow and opportunities to simplify over-engineered components. For a typical project with 4 components on 2 hosts, the current workflow involves:
+Analysis of forge reveals significant performance bottlenecks in the Docker image build/push/pull workflow and opportunities to simplify over-engineered components. For a typical project with 4 components on 2 hosts, the current workflow involves:
 
 - 1 base image build + push (multi-arch)
 - 4 component image builds + pushes
@@ -56,7 +56,7 @@ This document outlines immediate wins, medium-term optimizations, and architectu
 - **Code**: `commands/prepare_base.py:43` - `docker.build_multiarch(..., push=True)`
 
 #### 3. Unnecessary Managed Workspace
-- **Problem**: Stage builds images with sources copied directly in Dockerfile, but `.robocore/workspaces/` still created for generated files
+- **Problem**: Stage builds images with sources copied directly in Dockerfile, but `.forge/workspaces/` still created for generated files
 - **Impact**:
   - Confusing workspace structure
   - Wasted disk space
@@ -122,20 +122,20 @@ def stage_main(project_root: str, component: Optional[str] = None,
     )
 ```
 
-Usage: `robocore stage --skip-push` for rapid iteration.
+Usage: `forge stage --skip-push` for rapid iteration.
 
 ### 3. Eliminate Managed Workspace
 **Effort**: 4 hours
 **Impact**: Simpler codebase, less confusion
 
-**Current State**: After our recent refactor, `.robocore/workspaces/` only contains:
+**Current State**: After our recent refactor, `.forge/workspaces/` only contains:
 - `Dockerfile` (generated)
 - `repos.yaml` (generated)
 - `superclient.xml` (generated)
 
-**Improvement**: Move these to `.robocore/generated/{component}/`:
+**Improvement**: Move these to `.forge/generated/{component}/`:
 ```
-.robocore/
+.forge/
 ├── generated/
 │   ├── motion/
 │   │   ├── Dockerfile
@@ -202,11 +202,11 @@ local_registry_port: 5000
 # Start local registry automatically
 def ensure_local_registry():
     try:
-        docker.client.container.inspect("robocore-registry")
+        docker.client.container.inspect("forge-registry")
     except:
         docker.client.run(
             "registry:2",
-            name="robocore-registry",
+            name="forge-registry",
             detach=True,
             publish=[(5000, 5000)],
             restart="always"
@@ -269,8 +269,8 @@ docker.build_multiarch(
 
 Or use local cache:
 ```python
-cache_to="type=local,dest=/tmp/robocore-cache/{component}",
-cache_from="type=local,src=/tmp/robocore-cache/{component}",
+cache_to="type=local,dest=/tmp/forge-cache/{component}",
+cache_from="type=local,src=/tmp/forge-cache/{component}",
 ```
 
 ### 4. Smarter Component Selection
@@ -279,7 +279,7 @@ cache_from="type=local,src=/tmp/robocore-cache/{component}",
 
 Track source file hashes:
 ```python
-# .robocore/component-hashes.json
+# .forge/component-hashes.json
 {
   "motion": "abc123...",
   "lidar": "def456..."
@@ -480,7 +480,7 @@ Grand Total:       3m 55s (80% improvement)
 
 ## Conclusion
 
-The robocore-cli tool has significant optimization opportunities, particularly around Docker image management. The registry push/pull workflow is the primary bottleneck, contributing ~8-10 minutes of overhead for a typical 4-component project.
+The forge tool has significant optimization opportunities, particularly around Docker image management. The registry push/pull workflow is the primary bottleneck, contributing ~8-10 minutes of overhead for a typical 4-component project.
 
 **Immediate Priority**: Implement Phase 1 quick wins for 60-70% improvement with minimal risk.
 

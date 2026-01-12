@@ -79,7 +79,7 @@ def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force
     ubuntu = ubuntu_map.get(cfg.ros_distro, "jammy")
 
     # Generate Dockerfile.base
-    base_dir = os.path.join(project_root, ".robocore", "base")
+    base_dir = os.path.join(project_root, ".forge", "base")
     os.makedirs(base_dir, exist_ok=True)
     base_dockerfile = os.path.join(base_dir, "Dockerfile.base")
 

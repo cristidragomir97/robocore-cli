@@ -13,15 +13,15 @@ from commands.prepare_base import prepare_base_main
 from commands.clean import clean_main
 from commands.validate import validate_main
 from commands.pixi import pixi_main
-from core.exceptions import RobocoreError, ConfigurationError, ValidationError
+from core.exceptions import ForgeError, ConfigurationError, ValidationError
 from python_on_whales.exceptions import DockerException
 import subprocess
 
 def create_parser():
     colorama_init(autoreset=True)
     p = argparse.ArgumentParser(
-        prog="robocore-cli",
-        description="robocore-cli: build & deploy ROS2 in Docker"
+        prog="forge",
+        description="forge: build & deploy ROS2 in Docker"
     )
     p.add_argument('-p','--project-root', dest='project_root',
                    help='Path to project root')
@@ -132,7 +132,7 @@ def main():
                 for key, value in e.context.items():
                     print(Fore.RED + f"  - {key}: {value}", file=sys.stderr)
         sys.exit(1)
-    except RobocoreError as e:
+    except ForgeError as e:
         print(Fore.RED + f"[ERROR] {e}", file=sys.stderr)
         if hasattr(e, 'context') and e.context:
             # Special handling for multiple errors

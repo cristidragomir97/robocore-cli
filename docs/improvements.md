@@ -1,6 +1,6 @@
 # Implementation Improvements
 
-After analyzing the current robocore-cli implementation, particularly the new workspace management system, here are identified areas for improvement and recommendations for enhancing robustness, usability, and maintainability.
+After analyzing the current forge implementation, particularly the new workspace management system, here are identified areas for improvement and recommendations for enhancing robustness, usability, and maintainability.
 
 ## Critical Issues
 
@@ -52,15 +52,15 @@ sys.exit(f"[stage] ERROR: runs_on '{comp.runs_on}' not defined")
 
 **Proposed Solution:**
 ```python
-class RobocoreError(Exception):
-    """Base exception for robocore-cli errors"""
+class ForgeError(Exception):
+    """Base exception for forge errors"""
     pass
 
-class ConfigurationError(RobocoreError):
+class ConfigurationError(ForgeError):
     """Configuration validation errors"""
     pass
 
-class WorkspaceError(RobocoreError):
+class WorkspaceError(ForgeError):
     """Workspace management errors"""
     pass
 
@@ -95,7 +95,7 @@ for item in os.listdir(src_dir):
 class WorkspaceManager:
     def __init__(self, project_root: str):
         self.project_root = project_root
-        self.lock_file = os.path.join(project_root, ".robocore-cli", "workspace.lock")
+        self.lock_file = os.path.join(project_root, ".forge", "workspace.lock")
 
     def setup_component_workspace(self, component: Component) -> WorkspaceSetupResult:
         """Atomically setup component workspace with proper error handling"""
@@ -245,7 +245,7 @@ class ComponentConfig(BaseModel):
 
         return v
 
-class RobocoreConfig(BaseModel):
+class ForgeConfig(BaseModel):
     ros_distro: str = Field(..., description="ROS 2 distribution")
     ros_domain_id: int = Field(..., ge=0, le=232, description="ROS domain ID")
     registry: str = Field(..., description="Docker registry")
@@ -286,9 +286,9 @@ class RobocoreConfig(BaseModel):
 from abc import ABC, abstractmethod
 
 class Command(ABC):
-    """Base class for all robocore commands"""
+    """Base class for all forge commands"""
 
-    def __init__(self, config: RobocoreConfig, project_root: Path):
+    def __init__(self, config: ForgeConfig, project_root: Path):
         self.config = config
         self.project_root = project_root
         self.validator = ConfigValidator(config, project_root)
@@ -372,7 +372,7 @@ class StageCommand(Command):
 
 1. **Add basic validation before any operations**:
    ```bash
-   robocore-cli validate  # New command to check config without doing anything
+   forge validate  # New command to check config without doing anything
    ```
 
 2. **Create custom exception classes** to replace `sys.exit()` calls
@@ -387,4 +387,4 @@ class StageCommand(Command):
    pydantic>=1.10.0
    ```
 
-These improvements would significantly enhance the robustness, user experience, and maintainability of robocore-cli while preserving backward compatibility with existing configurations.
+These improvements would significantly enhance the robustness, user experience, and maintainability of forge while preserving backward compatibility with existing configurations.

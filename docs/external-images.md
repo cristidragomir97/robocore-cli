@@ -1,10 +1,10 @@
 # External Images and Custom Dockerfiles
 
-Robocore-cli now supports three ways to define component images:
+Forge-cli now supports three ways to define component images:
 
-## 1. Robocore-Managed Build (Default)
+## 1. Forge-Managed Build (Default)
 
-The traditional approach where robocore-cli generates a Dockerfile based on your configuration:
+The traditional approach where forge generates a Dockerfile based on your configuration:
 
 ```yaml
 components:
@@ -86,14 +86,14 @@ project_root/
 
 - **`image`** (string, optional): External pre-built Docker image
 - **`build`** (string, optional): Path to directory containing Dockerfile (relative to project root)
-- **`source`/`sources`** (string/list, optional): Local source paths for robocore-managed builds
+- **`source`/`sources`** (string/list, optional): Local source paths for forge-managed builds
 
 ### Mutual Exclusivity
 
 Only one of these can be specified per component:
 - `image` (external image)
 - `build` (custom Dockerfile)
-- `source` or `sources` (robocore-managed build)
+- `source` or `sources` (forge-managed build)
 - `folder` (legacy, deprecated)
 
 When using `image` or `build`, you **cannot** specify:
@@ -101,7 +101,7 @@ When using `image` or `build`, you **cannot** specify:
 - `apt_packages`
 - `pip_packages`
 
-These are only for robocore-managed builds.
+These are only for forge-managed builds.
 
 ### Shared Fields
 
@@ -173,7 +173,7 @@ WORKDIR /ros_ws
 
 ```yaml
 components:
-  # Robocore-managed build
+  # Forge-managed build
   - name: motion
     source: ros/src/leremix_control
     repositories:
@@ -200,8 +200,8 @@ components:
 
 ## Build Process
 
-### Robocore-Managed Build
-1. Generates Dockerfile in `.robocore/workspaces/{component}`
+### Forge-Managed Build
+1. Generates Dockerfile in `.forge/workspaces/{component}`
 2. Copies source packages into build context
 3. Builds with `docker buildx` for target architecture
 4. Pushes to registry
@@ -221,13 +221,13 @@ components:
 
 The configuration validator ensures:
 - Only one build method per component
-- `image` and `build` don't specify robocore build options
+- `image` and `build` don't specify forge build options
 - All components have `runs_on` (except simulated ones)
 - Custom Dockerfiles exist at specified paths
 
 ## Migration Guide
 
-### From Robocore-Managed to Custom Dockerfile
+### From Forge-Managed to Custom Dockerfile
 
 If you need more control, migrate from managed builds:
 

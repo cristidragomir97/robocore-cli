@@ -20,15 +20,15 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True, conf
     cfg = Config.load(project_root, config_file=config_file)
     docker = DockerHelper()
 
-    # Clean local .robocore directory
+    # Clean local .forge directory
     if local:
-        robocore_dir = os.path.join(project_root, ".robocore")
-        if os.path.exists(robocore_dir):
-            print(f"[clean] Removing local {robocore_dir}")
-            shutil.rmtree(robocore_dir)
-            print(f"[clean] ✓ Removed local .robocore")
+        forge_dir = os.path.join(project_root, ".forge")
+        if os.path.exists(forge_dir):
+            print(f"[clean] Removing local {forge_dir}")
+            shutil.rmtree(forge_dir)
+            print(f"[clean] ✓ Removed local .forge")
         else:
-            print(f"[clean] Local .robocore directory not found, skipping")
+            print(f"[clean] Local .forge directory not found, skipping")
 
         # Clean local component images (but not base image)
         print(f"[clean] Removing local component images...")
@@ -81,14 +81,14 @@ def clean_main(project_root: str, remote: bool = False, local: bool = True, conf
                     print(f"[clean:{host.name}] Warning: Failed to remove {img_tag}: {e}")
 
             # Determine remote project path (assuming same relative structure)
-            remote_robocore = f"~/{os.path.basename(project_root)}/.robocore"
+            remote_forge = f"~/{os.path.basename(project_root)}/.forge"
 
-            # Remove both mount_root and .robocore directories
+            # Remove both mount_root and .forge directories
             try:
-                cmd = ["ssh", f"{host.user}@{host.ip}", f"rm -rf {mount_root} {remote_robocore}"]
+                cmd = ["ssh", f"{host.user}@{host.ip}", f"rm -rf {mount_root} {remote_forge}"]
                 print(f"[clean:{host.name}] Running: {' '.join(cmd)}")
                 subprocess.run(cmd, check=True)
-                print(f"[clean:{host.name}] ✓ Removed {mount_root} and {remote_robocore}")
+                print(f"[clean:{host.name}] ✓ Removed {mount_root} and {remote_forge}")
             except subprocess.CalledProcessError as e:
                 print(f"[clean:{host.name}] ERROR: Failed to clean remote: {e}")
 

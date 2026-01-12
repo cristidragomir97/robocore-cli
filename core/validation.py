@@ -1,7 +1,7 @@
 """
 Pydantic models for configuration validation.
 
-Provides schema validation and type checking for robocore-cli configuration files.
+Provides schema validation and type checking for forge configuration files.
 """
 
 import os
@@ -30,7 +30,7 @@ class HostConfig(BaseModel):
     port: int = Field(2375, description="Docker daemon port")
     manager: bool = Field(False, description="DDS discovery server manager role")
     dds_ip: Optional[str] = Field(None, description="Secondary IP for DDS communication (defaults to ip if not set)")
-    mount_root: Optional[str] = Field(None, description="Remote mount root directory for builds (defaults to /home/{user}/robocore-artifacts)")
+    mount_root: Optional[str] = Field(None, description="Remote mount root directory for builds (defaults to /home/{user}/forge-artifacts)")
     build_on_device: bool = Field(False, description="Build components on this device instead of locally (faster for cross-arch builds)")
 
     @field_validator('port')
@@ -209,7 +209,7 @@ class ComponentConfig(BaseModel):
                 f"Component '{self.name}' can only specify one of: sources, source, folder, build, or image"
             )
 
-        # External images and custom builds shouldn't specify robocore build options
+        # External images and custom builds shouldn't specify forge build options
         if (has_image or has_build) and (has_repos or self.apt_packages or self.pip_packages):
             raise ValueError(
                 f"Component '{self.name}': When using 'image' or 'build', do not specify repositories, apt_packages, or pip_packages"
@@ -225,8 +225,8 @@ class ComponentConfig(BaseModel):
         return self
 
 
-class RobocoreConfig(BaseModel):
-    """Root configuration for robocore-cli project."""
+class ForgeConfig(BaseModel):
+    """Root configuration for forge project."""
     model_config = ConfigDict(extra='forbid')
 
     # Required fields
@@ -238,7 +238,7 @@ class RobocoreConfig(BaseModel):
     # Optional fields with defaults
     enable_apt_caching: bool = Field(False, description="Enable apt package caching")
     deploy_mode: str = Field('image', description="Deployment mode")
-    build_dir: str = Field('.robocore/build', description="Build output directory")
+    build_dir: str = Field('.forge/build', description="Build output directory")
     components_dir: str = Field('components', description="Components directory")
     workspace_dir: str = Field('ros_ws', description="ROS workspace directory name")
     workplace_folder: Optional[str] = Field(None, description="Workplace folder path")
@@ -312,12 +312,12 @@ class RobocoreConfig(BaseModel):
 
 
 class ConfigValidator:
-    """Validator for robocore configuration with filesystem checks."""
+    """Validator for forge configuration with filesystem checks."""
 
     def __init__(self, project_root: str):
         self.project_root = os.path.abspath(project_root)
 
-    def validate_config_file(self, config_path: str) -> RobocoreConfig:
+    def validate_config_file(self, config_path: str) -> ForgeConfig:
         """
         Validate config file and return parsed configuration.
 
@@ -338,7 +338,7 @@ class ConfigValidator:
             raise ConfigurationError(f"Failed to parse YAML: {e}")
 
         try:
-            config = RobocoreConfig(**data)
+            config = ForgeConfig(**data)
         except PydanticValidationError as e:
             # Extract all error messages from Pydantic validation
             errors = []
@@ -417,7 +417,7 @@ class ConfigValidator:
 
         return errors, warnings
 
-    def validate_source_paths(self, config: RobocoreConfig) -> List[str]:
+    def validate_source_paths(self, config: ForgeConfig) -> List[str]:
         """
         Validate that source paths exist in filesystem.
 
@@ -471,7 +471,7 @@ class ConfigValidator:
 
         return warnings
 
-    def validate_all(self, config_path: str) -> tuple[RobocoreConfig, List[str]]:
+    def validate_all(self, config_path: str) -> tuple[ForgeConfig, List[str]]:
         """
         Run all validation checks, collecting ALL errors before raising.
 
@@ -500,7 +500,7 @@ class ConfigValidator:
 
         # Try to validate with Pydantic (collect errors)
         try:
-            config = RobocoreConfig(**data)
+            config = ForgeConfig(**data)
         except PydanticValidationError as e:
             # Extract all error messages from Pydantic validation
             for error in e.errors():

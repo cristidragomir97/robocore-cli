@@ -1,5 +1,5 @@
 # Example configuration demonstrating all three component types
-# This shows how robocore-managed builds, external images, and custom Dockerfiles
+# This shows how forge-managed builds, external images, and custom Dockerfiles
 # can coexist in a single robot system.
 
 ros_distro: humble
@@ -34,8 +34,8 @@ common_packages:
 
 components:
   # ========================================
-  # 1. ROBOCORE-MANAGED BUILD
-  # robocore-cli generates Dockerfile and manages dependencies
+  # 1. FORGE-MANAGED BUILD
+  # forge-cli generates Dockerfile and manages dependencies
   # ========================================
   - name: navigation
     source: ros/src/nav_stack
@@ -108,7 +108,7 @@ components:
 
   # ========================================
   # MIXING DIFFERENT TYPES
-  # Motion control uses robocore-managed build
+  # Motion control uses forge-managed build
   # with local source + repositories
   # ========================================
   - name: motion_control

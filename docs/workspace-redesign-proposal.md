@@ -2,25 +2,25 @@
 
 ## Overview
 
-This proposal outlines a redesign of robocore-cli's workspace management to improve flexibility, support multiple source packages per component, and provide better isolation between managed workspaces and user source code.
+This proposal outlines a redesign of forge's workspace management to improve flexibility, support multiple source packages per component, and provide better isolation between managed workspaces and user source code.
 
 ## Current Issues
 
 1. **Rigid workspace structure**: Components must follow `{folder}/ros_ws/src` structure
 2. **Single package limitation**: One component = one folder/package
-3. **Source code mixing**: User source code lives in robocore-cli managed directories
+3. **Source code mixing**: User source code lives in forge managed directories
 4. **Inflexible paths**: Cannot reference existing ROS packages in arbitrary locations
 
 ## Proposed Solution
 
 ### 1. Managed Workspace Directory
 
-Introduce a `.robocore-cli/` directory within each project to house all managed workspaces and build artifacts:
+Introduce a `.forge/` directory within each project to house all managed workspaces and build artifacts:
 
 ```
 my_robot_project/
 ├── config.yaml
-├── .robocore-cli/
+├── .forge/
 │   ├── workspaces/
 │   │   ├── perception/         # Component workspace
 │   │   │   ├── src/           # Symlinks to source packages
@@ -92,8 +92,8 @@ class Component:
 
     @property
     def managed_workspace(self) -> str:
-        """Path to the managed workspace in .robocore-cli/workspaces/{name}"""
-        return f".robocore-cli/workspaces/{self.name}"
+        """Path to the managed workspace in .forge/workspaces/{name}"""
+        return f".forge/workspaces/{self.name}"
 
     @property
     def workspace_src(self) -> str:
@@ -276,7 +276,7 @@ components:
 
 ### Core Files
 - `core/models.py`: Update Component class and properties
-- `core/config.py`: Add `.robocore-cli` directory handling
+- `core/config.py`: Add `.forge` directory handling
 
 ### Command Files
 - `commands/stage.py`: Implement workspace linking logic

@@ -1,10 +1,10 @@
-# Robocore-CLI Process Flow
+# Forge Process Flow
 
-This document describes the complete workflow and architecture of robocore-cli, a tool for building, deploying, and managing containerized ROS2 systems across multiple hosts.
+This document describes the complete workflow and architecture of forge, a tool for building, deploying, and managing containerized ROS2 systems across multiple hosts.
 
 ## Overview
 
-Robocore-cli follows a declarative approach where everything is defined in a single `robot.yaml` configuration file. The tool manages the complete lifecycle from development to deployment using Docker containers and multi-host orchestration.
+Forge follows a declarative approach where everything is defined in a single `robot.yaml` configuration file. The tool manages the complete lifecycle from development to deployment using Docker containers and multi-host orchestration.
 
 ## Process Flow Diagram
 
@@ -21,25 +21,25 @@ graph TB
         direction TB
 
         %% Init Phase
-        Init[🚀 robocore-cli init]
-        Init --> InitOutput[📁 Project Structure<br/>- packages/<br/>- common_packages/<br/>- .robocore-cli/<br/>- robot.yaml template]
+        Init[🚀 forge init]
+        Init --> InitOutput[📁 Project Structure<br/>- packages/<br/>- common_packages/<br/>- .forge/<br/>- robot.yaml template]
 
         %% Prepare Base Phase
-        PrepareBase[🏗️ robocore-cli prep]
+        PrepareBase[🏗️ forge prep]
         PrepareBase --> BaseImage[🐳 Base ROS Image<br/>+ Common Packages]
 
         %% Stage Phase
-        Stage[📦 robocore-cli stage]
+        Stage[📦 forge stage]
         Stage --> |for each component| CompAnalysis[🔍 Component Analysis<br/>- Detect source paths<br/>- Setup managed workspace<br/>- Create symlinks]
         CompAnalysis --> DockerBuild[🏗️ Docker Build<br/>- Generate Dockerfile<br/>- Install dependencies<br/>- Configure DDS]
         DockerBuild --> ComposeGen[📄 Generate docker-compose<br/>Per Host]
 
         %% Build Phase
-        Build[🔨 robocore-cli build]
+        Build[🔨 forge build]
         Build --> LocalBuild[⚙️ Local Compilation<br/>- Copy source to build/<br/>- Run colcon build<br/>- Generate install/]
 
         %% Launch Phase
-        Launch[🚀 robocore-cli launch]
+        Launch[🚀 forge launch]
         Launch --> Sync[📡 Sync Builds<br/>rsync to remote hosts]
         Sync --> RemoteStart[▶️ Start Containers<br/>docker-compose up]
     end
@@ -145,7 +145,7 @@ graph TB
 ### 1. Project Initialization (`init`)
 - Creates project structure with sensible defaults
 - Generates `robot.yaml` template with examples
-- Sets up managed directories (`.robocore-cli/`)
+- Sets up managed directories (`.forge/`)
 
 ### 2. Base Preparation (`prep`)
 - Creates base ROS image for the specified distribution

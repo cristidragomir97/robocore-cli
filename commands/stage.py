@@ -168,11 +168,11 @@ def build_component_image(comp: Component,
             "tty": comp.tty,
         }
 
-    # Robocore-managed build (current logic)
+    # Forge-managed build (current logic)
     feats = detect_component_features(comp, cfg)
 
     # Working directory for generated files (Dockerfile, repos.yaml, superclient.xml)
-    comp_dir = os.path.join(cfg.root, ".robocore", "workspaces", comp.name)
+    comp_dir = os.path.join(cfg.root, ".forge", "workspaces", comp.name)
     os.makedirs(comp_dir, exist_ok=True)
 
     # Find DDS manager host (default to first host if none specified)
@@ -333,9 +333,9 @@ def stage_main(project_root: str,
 
     # Generate superclient.xml for local development (robostack)
     if dds_manager:
-        robocore_dir = os.path.join(project_root, '.robocore')
-        os.makedirs(robocore_dir, exist_ok=True)
-        superclient_path = os.path.join(robocore_dir, 'superclient.xml')
+        forge_dir = os.path.join(project_root, '.forge')
+        os.makedirs(forge_dir, exist_ok=True)
+        superclient_path = os.path.join(forge_dir, 'superclient.xml')
 
         # Get local IP for DDS communication
         import socket

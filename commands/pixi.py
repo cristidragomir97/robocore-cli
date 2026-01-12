@@ -12,7 +12,7 @@ from colorama import Fore
 
 from core.config import Config
 from core.renderer import TemplateRenderer
-from core.exceptions import RobocoreError
+from core.exceptions import ForgeError
 
 
 def detect_package_manager() -> Optional[str]:
@@ -156,7 +156,7 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
         cfg = Config.load(pr, config_file=config_file)
     except FileNotFoundError:
         print(Fore.RED + f"[pixi] ERROR: config.yaml not found in {pr}")
-        print(Fore.YELLOW + "[pixi] Run 'robocore-cli init' to create a project first")
+        print(Fore.YELLOW + "[pixi] Run 'forge init' to create a project first")
         sys.exit(1)
     except Exception as e:
         print(Fore.RED + f"[pixi] ERROR: Failed to load config: {e}")
@@ -175,12 +175,12 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
     print(Fore.GREEN + f"[pixi] ✓ manager host: {manager_host.name} ({manager_ip})")
 
     # 5) Check for persistent superclient.xml from stage command
-    robocore_dir = os.path.join(pr, '.robocore')
-    superclient_path = os.path.join(robocore_dir, 'superclient.xml')
+    forge_dir = os.path.join(pr, '.forge')
+    superclient_path = os.path.join(forge_dir, 'superclient.xml')
 
     if not os.path.exists(superclient_path):
         print(Fore.YELLOW + f"[pixi] WARNING: superclient.xml not found at {superclient_path}")
-        print(Fore.YELLOW + f"[pixi] Run 'robocore-cli stage' to generate it")
+        print(Fore.YELLOW + f"[pixi] Run 'forge stage' to generate it")
         print(Fore.YELLOW + f"[pixi] Continuing with ROS_DISCOVERY_SERVER only...")
         superclient_path = None
     else:

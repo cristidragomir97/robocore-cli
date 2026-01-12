@@ -11,7 +11,7 @@ dist/
 .eggs/
 
 # Managed directory with build artifacts and temp files
-.robocore/
+.forge/
 
 # Mac OS stuff
 .DS_Store

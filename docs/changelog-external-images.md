@@ -2,8 +2,8 @@
 
 ## Summary
 
-Added support for three component build strategies in robocore-cli:
-1. **Robocore-managed builds** (existing) - automated Dockerfile generation
+Added support for three component build strategies in forge:
+1. **Forge-managed builds** (existing) - automated Dockerfile generation
 2. **External pre-built images** (new) - use community images without building
 3. **Custom Dockerfile builds** (new) - full control for complex builds
 
@@ -25,7 +25,7 @@ Added fields to `ComponentConfig`:
 
 Added validation logic:
 - Ensures mutual exclusivity between `source`, `sources`, `folder`, `build`, and `image`
-- Prevents mixing `image`/`build` with robocore build options (`repositories`, `apt_packages`, `pip_packages`)
+- Prevents mixing `image`/`build` with forge build options (`repositories`, `apt_packages`, `pip_packages`)
 - Validates that custom Dockerfiles exist at specified paths
 
 ### 3. Stage Command (`commands/stage.py`)
@@ -43,10 +43,10 @@ Modified `build_component_image()` to handle three build modes:
 - Builds with `docker buildx` for target architecture
 - Pushes to registry
 
-**Robocore-Managed Mode** (default):
+**Forge-Managed Mode** (default):
 - Existing behavior
 - Generates Dockerfile with dependencies
-- Builds in `.robocore/workspaces/{component}/`
+- Builds in `.forge/workspaces/{component}/`
 
 ### 4. Documentation
 
@@ -92,7 +92,7 @@ project_root/
       camera_driver/
 ```
 
-### Robocore-Managed (Existing)
+### Forge-Managed (Existing)
 
 ```yaml
 components:
@@ -124,12 +124,12 @@ If you need to customize a community image:
 2. Change `image: osrf/ros:humble` to `build: docker/{component}`
 3. Add your customizations to the Dockerfile
 
-### From Robocore-Managed to Custom Dockerfile
+### From Forge-Managed to Custom Dockerfile
 
 If you need more control:
 
 1. Generate Dockerfile during a normal stage run
-2. Copy generated Dockerfile from `.robocore/workspaces/{component}/`
+2. Copy generated Dockerfile from `.forge/workspaces/{component}/`
 3. Move to `docker/{component}/` and customize
 4. Change component config from `source:` to `build: docker/{component}`
 

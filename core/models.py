@@ -23,7 +23,7 @@ class Host:
     @property
     def effective_mount_root(self) -> str:
         """Return mount_root if set, otherwise fall back to default."""
-        return self.mount_root if self.mount_root else f"/home/{self.user}/robocore-artifacts"
+        return self.mount_root if self.mount_root else f"/home/{self.user}/forge-artifacts"
 
 @dataclass
 class RepositorySpec:
@@ -236,8 +236,8 @@ class Component:
 
     @property
     def managed_workspace(self) -> str:
-        """Path to the managed workspace in .robocore/workspaces/{name}"""
-        return f".robocore/workspaces/{self.name}"
+        """Path to the managed workspace in .forge/workspaces/{name}"""
+        return f".forge/workspaces/{self.name}"
 
     @property
     def workspace_src(self) -> str:

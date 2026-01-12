@@ -1,11 +1,11 @@
-# 🤖 robocore-cli
+# 🤖 forge
 
-**robocore-cli** is a lightweight tool designed to simplify how you build, prototype, and deploy ROS 2 systems using containers.
+**forge** is a lightweight tool designed to simplify how you build, prototype, and deploy ROS 2 systems using containers.
 
-It helps you structure your robot software as modular components, run them across one or more machines, and manage everything from a single configuration file. Whether you’re just wiring up your first prototype or preparing for deployment in the field, `robocore-cli` gives you a consistent workflow that grows with your project.
+It helps you structure your robot software as modular components, run them across one or more machines, and manage everything from a single configuration file. Whether you’re just wiring up your first prototype or preparing for deployment in the field, `forge` gives you a consistent workflow that grows with your project.
 
 
-**robocore-cli** can help with:
+**forge** can help with:
 - **Prototyping** quickly on your dev machine while keeping things reproducible
 - **Deploying** to real robots without ad hoc scripts and broken dependencies
 - **Iterating** on your robot system without needing to rebuild everything from scratch
@@ -42,8 +42,8 @@ It helps you structure your robot software as modular components, run them acros
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/robocore-cli.git
-cd robocore-cli
+git clone https://github.com/your-org/forge.git
+cd forge
 
 # Create a virtual environment (recommended)
 python3 -m venv .venv
@@ -53,10 +53,10 @@ source .venv/bin/activate
 pip install .
 ```
 
-After installation, the `robocore` command will be available in your PATH:
+After installation, the `forge` command will be available in your PATH:
 
 ```bash
-robocore --help
+forge --help
 ```
 
 ### Development installation
@@ -123,7 +123,7 @@ image_prefix: myrobot                 # Docker image name prefix
 
 # Optional fields
 tag: latest                           # Docker image tag (default: latest)
-build_dir: .robocore/build           # Build output directory
+build_dir: .forge/build           # Build output directory
 workspace_dir: ros_ws                 # ROS workspace directory name
 mount_root: /home/user/ros_builds    # Remote mount root for builds
 
@@ -149,7 +149,7 @@ discovery_server: localhost           # Discovery server address
 
 **Optional fields:**
 * **tag**: Docker image tag (default: `latest`)
-* **build_dir**: Local build output directory (default: `.robocore/build`)
+* **build_dir**: Local build output directory (default: `.forge/build`)
 * **workspace_dir**: ROS workspace name (default: `ros_ws`)
 * **mount_root**: Remote directory for build artifacts
 * **apt_mirror**: Custom Ubuntu apt mirror URL for faster downloads
@@ -209,11 +209,11 @@ These are included in the base image so they don't get duplicated per component�
 
 ### 4. Components – Modular, Swappable Units
 
-Robocore-cli supports three ways to define components:
+Forge supports three ways to define components:
 
-#### a. Robocore-Managed Build (Default)
+#### a. Forge-Managed Build (Default)
 
-robocore-cli generates a Dockerfile and manages the build process:
+forge generates a Dockerfile and manages the build process:
 
 ```yaml
 components:
@@ -311,7 +311,7 @@ See [docs/external-images.md](docs/external-images.md) for detailed examples and
 ---
 
 **Component Build Behavior**:
-- For **robocore-managed** builds: compilation occurs during the `build` step
+- For **forge-managed** builds: compilation occurs during the `build` step
 - For **external images**: no build step, image used as-is
 - For **custom Dockerfiles**: build happens during `stage` step
 
@@ -321,7 +321,7 @@ See [docs/external-images.md](docs/external-images.md) for detailed examples and
 
 ### init
 
-**Command**: `robocore-cli <project_folder> init`
+**Command**: `forge <project_folder> init`
 
 **Description**: Bootstrap a new project in the specified directory.
 
@@ -329,7 +329,7 @@ See [docs/external-images.md](docs/external-images.md) for detailed examples and
 
 ### prep
 
-**Command**: `robocore-cli <project_folder> prep`
+**Command**: `forge <project_folder> prep`
 
 **Description**: Creates a base image with the **ros_distro** and including the common_packages. Make sure you re-run this everytime you add a new common package. 
 
@@ -337,7 +337,7 @@ See [docs/external-images.md](docs/external-images.md) for detailed examples and
 
 ### stage
 
-**Command**: `robocore-cli <project_folder> stage`
+**Command**: `forge <project_folder> stage`
 
 **Description**: The stage step is where each component's container image is prepared with all its required dependencies, but without compiling or adding the actual application code yet. During this step, for every package:
 
@@ -356,11 +356,11 @@ For components using `image` or `build` fields, the stage step handles their Doc
 
 ### build
 
-**Command**:  `robocore-cli <project_folder> build`
+**Command**:  `forge <project_folder> build`
 
 **Description**:  The build step compiles the actual ROS workspace for each component using the environment prepared during the stage step. This process happens locally, inside the corresponding container, ensuring that builds are isolated, repeatable, and platform-appropriate. During this step, for every component:
 * The corresponding stage container is started locally.
-* The component's workspace is mounted into the container from `.robocore/build/{component}/ros_ws/`.
+* The component's workspace is mounted into the container from `.forge/build/{component}/ros_ws/`.
 * The workspace is built using colcon, with output artifacts written to the install/ and build/ folders within the managed workspace.
 * These artifacts are not embedded into the image, keeping the final runtime image clean and enabling fast rebuilds.
 
@@ -371,7 +371,7 @@ For components using `image` or `build` fields, the stage step handles their Doc
 
 ### launch
 
-**Command**: `robocore-cli <project_folder> launch`
+**Command**: `forge <project_folder> launch`
 
 **Description**: Syncs compiled components to target hosts and launches containers. This command transfers only changed files using rsync (for remote hosts) and starts the appropriate containers on each host.
 
@@ -464,14 +464,14 @@ This approach however might quickly saturate your bandwidth, introducing latency
 ---
 
 ## Networking
-`robocore-cli` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines. he goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
+`forge` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines. he goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
 
-By default, all containers launched by robocore-cli use host networking. This simplifies ROS 2 communication because:
+By default, all containers launched by forge use host networking. This simplifies ROS 2 communication because:
 * DDS (specifically Fast DDS or Cyclone DDS) can directly use multicast, broadcast, and unicast to discover and connect nodes.
 * No need to expose individual container ports or deal with NAT and Docker’s virtual networks.
 * Tools like `ros2 topic echo`, `rviz2`, or `ros2 node list` work out of the box across hosts—assuming firewalls and routes are properly configured.
 
-To avoid the limitations of peer-to-peer discovery at scale or in mixed-network setups, robocore-cli automatically provisions a Fast DDS Discovery Server container per robot network.
+To avoid the limitations of peer-to-peer discovery at scale or in mixed-network setups, forge automatically provisions a Fast DDS Discovery Server container per robot network.
 
 In this setup:
 * A discovery server container is launched on the robot or designated control node.
@@ -484,10 +484,10 @@ Long story short, as long as your hosts are defined corectly in the config.yaml 
 
 ## Multi-host systems
 
-One of the most powerful capabilities of the `robocore-cli` workflow is support for multi-host systems where different parts of your ROS 2 stack run on different physical machines but function as a single, seamless graph.
+One of the most powerful capabilities of the `forge` workflow is support for multi-host systems where different parts of your ROS 2 stack run on different physical machines but function as a single, seamless graph.
 
 
-By defining multiple `hosts` in your `robot.yaml` and assigning components to them via the `runs_on` field, `robocore-cli` enables developers to shift computation between machines with minimal effort. All networking, DDS discovery, and build architecture targeting are handled for you.
+By defining multiple `hosts` in your `robot.yaml` and assigning components to them via the `runs_on` field, `forge` enables developers to shift computation between machines with minimal effort. All networking, DDS discovery, and build architecture targeting are handled for you.
 
 
 ### ✅ **Example 1: MoveIt or Navigation Stack Initially on Dev Machine, Then Moved to Robot**
@@ -510,9 +510,9 @@ components:
 
 Then re-run:
 ```yaml
-robocore-cli stage
-robocore-cli build
-robocore-cli launch
+forge stage
+forge build
+forge launch
 ```
 
 The tool will:
@@ -529,7 +529,7 @@ Imagine a robot equipped with several cameras positioned around its body—for e
 
 Meanwhile, a central main computer (e.g., an x86 SBC or industrial PC) acts as the coordination hub—receiving processed data from all Jetsons, fusing it, and making high-level decisions.
 
-This setup can be easily modeled in robocore-cli:
+This setup can be easily modeled in forge:
 
 ```yaml
 hosts:
@@ -576,7 +576,7 @@ Advantages of this setup:
 * The main computer receives compact, semantically rich data (e.g., object bounding boxes or segmentation maps), not raw images.
 * All components participate in a unified ROS 2 graph, coordinated by the central DDS Discovery Server.
 
-With robocore-cli, the complexity of building for mixed architectures (x86 for the main computer, ARM64 for Jetsons), syncing code, and managing the container network is abstracted away. You simply define the roles in the robot.yaml, and the tool handles staging, building, syncing, and orchestration.
+With forge, the complexity of building for mixed architectures (x86 for the main computer, ARM64 for Jetsons), syncing code, and managing the container network is abstracted away. You simply define the roles in the robot.yaml, and the tool handles staging, building, syncing, and orchestration.
 
 
 This approach scales well for robots with multi-modal perception systems and provides a clean separation of concerns across devices.
@@ -584,10 +584,10 @@ This approach scales well for robots with multi-modal perception systems and pro
 ---
 
 ## 💡 Notes & Tips
-Here are a few quality of life tips that are not covered or automatically handled by `robocore-cli`. 
+Here are a few quality of life tips that are not covered or automatically handled by `forge`. 
 
 ### Enabling TCP socket for docker hosts.
-robocore-cli aims to be as transparent as possible to the systems installed on the robots. There is only one modification required for hosts to be able to work with this tool, and that is to have the docker host on the clients listen on a TCP socket. By default we are assuming the network you are running this on is under your control, and it is safe to leave the socket unprotected. For more information about how to secure the Docker TCP check out [this guide](). 
+forge aims to be as transparent as possible to the systems installed on the robots. There is only one modification required for hosts to be able to work with this tool, and that is to have the docker host on the clients listen on a TCP socket. By default we are assuming the network you are running this on is under your control, and it is safe to leave the socket unprotected. For more information about how to secure the Docker TCP check out [this guide](). 
 
 1. Create `daemon.json` file in `/etc/docker`:
 

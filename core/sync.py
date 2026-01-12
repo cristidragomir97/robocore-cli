@@ -46,7 +46,7 @@ class SyncManager:
 
             if is_localhost:
                 # For localhost, builds are already in place - no sync needed
-                # The compose file will mount directly from .robocore/build/<component>/ros_ws
+                # The compose file will mount directly from .forge/build/<component>/ros_ws
                 print(f"[sync] Skipping rsync for {comp.name} on localhost ({host.name})")
                 print(f"[sync] Using local build directory: {src}")
                 continue

@@ -1,6 +1,6 @@
 # End-to-End Testing Strategy
 
-This document outlines a comprehensive testing strategy for robocore-cli, covering multi-host deployment, DDS discovery, cross-architecture builds, and real ROS communication scenarios.
+This document outlines a comprehensive testing strategy for forge, covering multi-host deployment, DDS discovery, cross-architecture builds, and real ROS communication scenarios.
 
 ## Testing Objectives
 
@@ -103,7 +103,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Create test network
-        run: docker network create robocore-test
+        run: docker network create forge-test
 
       - name: Run test scenario
         run: ./tests/e2e/run-scenario.sh ${{ matrix.scenario }}
@@ -130,7 +130,7 @@ jobs:
 
 ### Scenario 1: Single Host Deployment
 
-**Objective:** Validate basic robocore-cli functionality on a single machine
+**Objective:** Validate basic forge functionality on a single machine
 
 **Setup:**
 ```yaml
@@ -155,11 +155,11 @@ components:
 ```
 
 **Test Steps:**
-1. `robocore-cli init test-project`
+1. `forge init test-project`
 2. Copy test configuration
-3. `robocore-cli stage`
-4. `robocore-cli build`
-5. `robocore-cli deploy`
+3. `forge stage`
+4. `forge build`
+5. `forge deploy`
 6. Verify container is running
 7. Check ROS topics are published
 
@@ -215,7 +215,7 @@ components:
 
 **Test Steps:**
 1. Provision multi-VM environment
-2. Deploy robocore-cli configuration
+2. Deploy forge configuration
 3. Verify DDS discovery between hosts
 4. Test ROS topic communication across network
 5. Simulate network partitions and recovery
@@ -329,7 +329,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Any
 
-class RobocoreE2ETest:
+class ForgeE2ETest:
     """Base class for end-to-end tests"""
 
     def __init__(self, config_file: str, test_name: str):
@@ -352,8 +352,8 @@ class RobocoreE2ETest:
         # Clean project directory
         pass
 
-    def run_robocore_command(self, command: List[str]) -> subprocess.CompletedProcess:
-        """Run robocore-cli command with proper error handling"""
+    def run_forge_command(self, command: List[str]) -> subprocess.CompletedProcess:
+        """Run forge command with proper error handling"""
         pass
 
     def wait_for_container_ready(self, container_name: str, timeout: int = 60):
@@ -373,7 +373,7 @@ class RobocoreE2ETest:
 
 ```python
 # tests/e2e/scenarios/multi_host.py
-class TestMultiHostDeployment(RobocoreE2ETest):
+class TestMultiHostDeployment(ForgeE2ETest):
 
     def test_multi_host_deployment(self):
         """Test complete multi-host deployment workflow"""
@@ -383,19 +383,19 @@ class TestMultiHostDeployment(RobocoreE2ETest):
 
         try:
             # Stage components
-            result = self.run_robocore_command(['stage'])
+            result = self.run_forge_command(['stage'])
             assert result.returncode == 0
 
             # Build components
-            result = self.run_robocore_command(['build'])
+            result = self.run_forge_command(['build'])
             assert result.returncode == 0
 
             # Deploy to hosts
-            result = self.run_robocore_command(['deploy'])
+            result = self.run_forge_command(['deploy'])
             assert result.returncode == 0
 
             # Start containers
-            result = self.run_robocore_command(['run'])
+            result = self.run_forge_command(['run'])
             assert result.returncode == 0
 
             # Wait for all containers to be ready
@@ -637,7 +637,7 @@ tests/e2e/fixtures/test-packages/
 
 ```python
 # tests/performance/benchmarks.py
-class RobocorePerformanceBenchmarks:
+class ForgePerformanceBenchmarks:
 
     def benchmark_build_time(self, num_components: int):
         """Benchmark build time vs number of components"""
@@ -652,4 +652,4 @@ class RobocorePerformanceBenchmarks:
         pass
 ```
 
-This comprehensive testing strategy ensures robocore-cli works reliably across different environments, architectures, and deployment scenarios while providing both automated CI/CD testing and real hardware validation through your SBC farm.
+This comprehensive testing strategy ensures forge works reliably across different environments, architectures, and deployment scenarios while providing both automated CI/CD testing and real hardware validation through your SBC farm.

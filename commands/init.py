@@ -15,7 +15,7 @@ def init_main(project_root: str, config_file: str = 'config.yaml'):
         print(Fore.RED + f"[init] {config_file} already exists, aborting.", file=sys.stderr)
         sys.exit(1)
 
-    print(Fore.CYAN + "Welcome to robocore-cli! Let's set up your project…")
+    print(Fore.CYAN + "Welcome to forge! Let's set up your project…")
 
     # 2) Minimal prompts
     distro = input("ROS distro [humble]: ").strip() or "humble"
@@ -97,9 +97,9 @@ def init_main(project_root: str, config_file: str = 'config.yaml'):
         f.write("# 1) Create your ROS packages in logical directories (e.g., packages/)\n")
         f.write("# 2) Populate common_packages/ with any shared packages\n")
         f.write("# 3) Edit the components above to reference your packages\n")
-        f.write("# 4) Run `robocore-cli stage` to generate Dockerfiles & compose\n")
-        f.write("# 5) Run `robocore-cli build` to compile in Docker\n")
-        f.write("# 6) Run `robocore-cli deploy` to sync and launch containers\n\n")
+        f.write("# 4) Run `forge stage` to generate Dockerfiles & compose\n")
+        f.write("# 5) Run `forge build` to compile in Docker\n")
+        f.write("# 6) Run `forge deploy` to sync and launch containers\n\n")
         f.write("# ─── Workspace Structure ─────────────────────────────────────────\n")
         f.write("# Your project directory can be organized however you like:\n")
         f.write("# my_robot_project/\n")
@@ -109,16 +109,16 @@ def init_main(project_root: str, config_file: str = 'config.yaml'):
         f.write("# │   └── camera_driver/\n")
         f.write("# ├── shared/               # Shared packages\n")
         f.write("# │   └── sensor_msgs/\n")
-        f.write("# └── .robocore/            # Managed by robocore-cli\n")
+        f.write("# └── .forge/               # Managed by forge\n")
         f.write("#     └── workspaces/       # Component workspaces (auto-generated)\n\n")
 
     # 5) Scaffold on-disk dirs (only create managed directory)
-    os.makedirs(".robocore", exist_ok=True)
+    os.makedirs(".forge", exist_ok=True)
 
     # Create .gitignore for managed directory
-    gitignore_path = os.path.join(".robocore", ".gitignore")
+    gitignore_path = os.path.join(".forge", ".gitignore")
     with open(gitignore_path, "w") as f:
-        f.write("# robocore-cli managed files\n")
+        f.write("# forge managed files\n")
         f.write("workspaces/\n")
         f.write("cache/\n")
         f.write("repos/\n")

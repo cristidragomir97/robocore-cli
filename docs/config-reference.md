@@ -1,6 +1,6 @@
 # Configuration File Reference
 
-This document provides a comprehensive reference for writing `config.yaml` files for robocore-cli. The configuration file is the central place where you define your robot system's structure, components, deployment targets, and behavior.
+This document provides a comprehensive reference for writing `config.yaml` files for forge. The configuration file is the central place where you define your robot system's structure, components, deployment targets, and behavior.
 
 ## Overview
 
@@ -514,7 +514,7 @@ my_robot_project/
 ├── common_packages/               # Common packages for base image
 │   └── robot_msgs/
 ├── build/                         # Build artifacts (auto-generated)
-└── .robocore-cli/                 # Managed by robocore-cli (auto-generated)
+└── .forge/                 # Managed by forge (auto-generated)
     └── workspaces/
         ├── perception_system/     # Component workspace with symlinked sources
         │   └── src/
@@ -560,4 +560,4 @@ If you have existing projects using the old `folder` field:
 8. **Test configurations** with simulation components first
 9. **Document custom fields** with YAML comments
 10. **Version control** your config.yaml alongside your code
-11. **Keep source code separate** from robocore-cli managed files
+11. **Keep source code separate** from forge managed files

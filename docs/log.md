@@ -45,8 +45,8 @@ Added strict schema validation to reject unknown configuration fields.
     - Line 64: `CommonPackageConfig`
     - Line 100: `OptimisationConfig`
     - Line 108: `ComponentConfig`
-    - Line 185: `RobocoreConfig`
-  - Line 201: Added `workplace_folder` field to `RobocoreConfig` schema (was missing, causing false positives)
+    - Line 185: `ForgeConfig`
+  - Line 201: Added `workplace_folder` field to `ForgeConfig` schema (was missing, causing false positives)
 
 - **tests/unit/test_validation.py**
   - Lines 427-446: Added tests for unknown field detection in components and root config
@@ -128,7 +128,7 @@ Docker command failures now show clean error messages instead of full Python tra
 ```
 [ERROR] Unhandled exception:
 Traceback (most recent call last):
-  File "/Users/cdr/Work/robocore-cli/cli.py", line 119, in main
+  File "/Users/cdr/Work/forge/cli.py", line 119, in main
     ...
   File "/opt/homebrew/lib/python3.13/site-packages/python_on_whales/utils.py", line 220, in run
     raise DockerException(...)
@@ -161,7 +161,7 @@ Fixed sync manager to use correct build directory paths.
   - Line 17: Changed `self.build = os.path.abspath(cfg.build_dir)` to `self.build = os.path.join(cfg.root, cfg.build_dir)`
   - Line 23: Changed hardcoded `"build"` to `self.build` for proper path resolution
 
-**Impact:** Sync now correctly finds build artifacts in `.robocore/build/` instead of looking in wrong paths.
+**Impact:** Sync now correctly finds build artifacts in `.forge/build/` instead of looking in wrong paths.
 
 ---
 
@@ -197,9 +197,9 @@ New command to remove build artifacts and workspaces on local and remote machine
 
 **What changed:**
 - **commands/clean.py** (NEW FILE)
-  - `clean_main()` function to remove `.robocore` directories
-  - Local cleanup: removes `.robocore/` in project root
-  - Remote cleanup: stops containers, removes `mount_root` and `.robocore` directories on hosts
+  - `clean_main()` function to remove `.forge` directories
+  - Local cleanup: removes `.forge/` in project root
+  - Remote cleanup: stops containers, removes `mount_root` and `.forge` directories on hosts
   - Uses SSH to execute cleanup commands on remote hosts
 
 - **cli.py**

@@ -16,7 +16,7 @@ from core.exceptions import ConfigurationError, SourceNotFoundError, ValidationE
 
 def validate_main(project_root: str, config_file: str = 'config.yaml'):
     """
-    Validate robocore configuration.
+    Validate forge configuration.
 
     Args:
         project_root: Path to project directory

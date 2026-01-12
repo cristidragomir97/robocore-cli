@@ -4,7 +4,7 @@ import getpass
 import yaml
 from colorama import Fore
 from .models import Host, Component, CommonPackage
-from .validation import ConfigValidator, RobocoreConfig
+from .validation import ConfigValidator, ForgeConfig
 from .exceptions import ConfigurationError, SourceNotFoundError, ValidationError
 
 class Config:
@@ -23,7 +23,7 @@ class Config:
 
         # optional / with defaults
         self.deploy_mode     = data.get('deploy_mode', 'image')
-        self.build_dir       = data.get('build_dir', '.robocore/build')
+        self.build_dir       = data.get('build_dir', '.forge/build')
         self.components_dir  = data.get('components_dir', 'components')
         self.workspace_dir   = data.get('workspace_dir', 'ros_ws')
         self.compose_file    = data.get('compose_file', 'docker-compose.yml')
