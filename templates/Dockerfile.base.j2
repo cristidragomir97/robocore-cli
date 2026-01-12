@@ -1,5 +1,9 @@
 # ─── STAGE 0: Build ROS2 + common_packages ───────────────────────────────
+{% if base_image_override %}
+FROM {{ base_image_override }} AS common-builder
+{% else %}
 FROM ubuntu:{{ ubuntu }} AS common-builder
+{% endif %}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -49,6 +53,7 @@ RUN apt-get clean && apt-get update && apt-get install -y --fix-missing \
     ros-{{ ros_distro }}-ros-base \
     python3-colcon-common-extensions \
     python3-rosdep \
+    ros-{{ ros_distro }}-rmw-zenoh-cpp \
     python3-pip && \
     pip3 install {% if ubuntu == 'noble' %}--break-system-packages {% endif %}-U vcstool && \
     rosdep init

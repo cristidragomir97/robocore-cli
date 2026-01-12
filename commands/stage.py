@@ -198,12 +198,19 @@ def build_component_image(comp: Component,
     superclient_path = os.path.join(comp_dir, "superclient.xml")
     superclient_rel = os.path.relpath(superclient_path, cfg.root)
 
-    renderer.render_superclient(
-        out_path=superclient_path,
-        participantID=participant_id,
-        this_host_ip=host.effective_dds_ip,
-        dds_server_host_ip=dds_manager.effective_dds_ip
-    )
+    # Only generate superclient.xml when using FastDDS
+    if cfg.is_fastdds:
+        renderer.render_superclient(
+            out_path=superclient_path,
+            participantID=participant_id,
+            this_host_ip=host.effective_dds_ip,
+            dds_server_host_ip=dds_manager.effective_dds_ip
+        )
+
+    # Compute Zenoh router endpoint if using Zenoh
+    zenoh_router_endpoint = None
+    if cfg.is_zenoh:
+        zenoh_router_endpoint = f"tcp/{dds_manager.effective_dds_ip}:{cfg.zenoh_router_port}"
 
     dockerfile_path = os.path.join(comp_dir, "Dockerfile")
     renderer.render_dockerfile(
@@ -214,14 +221,16 @@ def build_component_image(comp: Component,
         comp=comp,
         source_packages=feats["source_packages"],
         repos_file=repos_file_rel,
-        superclient_path=superclient_rel,
+        superclient_path=superclient_rel if cfg.is_fastdds else "",
         apt_packages=comp.apt_packages or [],
         pip_packages=comp.pip_packages or [],
         postinstall=comp.postinstall or [],
         has_repos=feats["has_repos"],
         comp_src_exists=feats["comp_src_exists"],
         enable_apt_caching=cfg.enable_apt_caching,
-        dds_server_ip=dds_manager.effective_dds_ip
+        dds_server_ip=dds_manager.effective_dds_ip,
+        rmw_implementation=cfg.rmw_implementation,
+        zenoh_router_endpoint=zenoh_router_endpoint
     )
 
     if not os.path.isfile(dockerfile_path):
@@ -316,46 +325,58 @@ def stage_main(project_root: str,
 
         staged_by_host[host_name] = staged
 
-    # Find DDS manager host for compose files
-    dds_manager = next((h for h in cfg.hosts if h.manager), None)
-    if not dds_manager and len(cfg.hosts) > 0:
-        dds_manager = cfg.hosts[0]
+    # Find manager host for compose files (used for DDS server or Zenoh router)
+    manager_host = next((h for h in cfg.hosts if h.manager), None)
+    if not manager_host and len(cfg.hosts) > 0:
+        manager_host = cfg.hosts[0]
 
     # Write one docker-compose.<host>.yaml per host
     for host_name, staged_comps in staged_by_host.items():
         host = hosts_map[host_name]
         compose_name = f"docker-compose.{host_name}.yaml"
         out_path = os.path.join(".", compose_name)
-        # Only include dds_server section in the manager host's compose file
-        host_dds_manager = dds_manager if host.manager else None
-        renderer.render_compose(out_path, staged_comps, cfg, host=host, dds_manager=host_dds_manager)
+        # Only include middleware router section in the manager host's compose file
+        host_dds_manager = manager_host if (host.manager and cfg.is_fastdds) else None
+        host_zenoh_manager = manager_host if (host.manager and cfg.is_zenoh) else None
+        renderer.render_compose(out_path, staged_comps, cfg, host=host, dds_manager=host_dds_manager, zenoh_manager=host_zenoh_manager)
         print(f"[stage] Wrote '{compose_name}'")
 
-    # Generate superclient.xml for local development (robostack)
-    if dds_manager:
+    # Generate local development config based on RMW implementation
+    if manager_host:
         forge_dir = os.path.join(project_root, '.forge')
         os.makedirs(forge_dir, exist_ok=True)
-        superclient_path = os.path.join(forge_dir, 'superclient.xml')
 
-        # Get local IP for DDS communication
-        import socket
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((dds_manager.effective_dds_ip, 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-        except Exception:
-            local_ip = "127.0.0.1"
+        if cfg.is_fastdds:
+            # Generate superclient.xml for local development (FastDDS)
+            superclient_path = os.path.join(forge_dir, 'superclient.xml')
 
-        renderer.render_superclient(
-            superclient_path,
-            participantID=1,  # Local dev machine uses participant ID 1
-            this_host_ip=local_ip,
-            dds_server_host_ip=dds_manager.effective_dds_ip
-        )
-        print(Fore.GREEN + f"[stage] ✓ Generated superclient.xml for local development")
-        print(Fore.CYAN + f"[stage]   Location: {superclient_path}")
-        print(Fore.CYAN + f"[stage]   DDS Server: {dds_manager.effective_dds_ip}:11811")
+            # Get local IP for DDS communication
+            import socket
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect((manager_host.effective_dds_ip, 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                local_ip = "127.0.0.1"
+
+            renderer.render_superclient(
+                superclient_path,
+                participantID=1,  # Local dev machine uses participant ID 1
+                this_host_ip=local_ip,
+                dds_server_host_ip=manager_host.effective_dds_ip
+            )
+            print(Fore.GREEN + f"[stage] ✓ Generated superclient.xml for local development")
+            print(Fore.CYAN + f"[stage]   Location: {superclient_path}")
+            print(Fore.CYAN + f"[stage]   DDS Server: {manager_host.effective_dds_ip}:11811")
+        elif cfg.is_zenoh:
+            # Print Zenoh router info for local development
+            zenoh_endpoint = f"tcp/{manager_host.effective_dds_ip}:{cfg.zenoh_router_port}"
+            print(Fore.GREEN + f"[stage] ✓ Zenoh RMW configured")
+            print(Fore.CYAN + f"[stage]   Zenoh Router: {zenoh_endpoint}")
+            print(Fore.CYAN + f"[stage]   For local development, set:")
+            print(Fore.CYAN + f"[stage]     export RMW_IMPLEMENTATION=rmw_zenoh_cpp")
+            print(Fore.CYAN + f"[stage]     export ZENOH_ROUTER={zenoh_endpoint}")
 
 if __name__ == "__main__":
     import argparse

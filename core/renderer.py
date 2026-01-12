@@ -38,7 +38,9 @@ class TemplateRenderer:
                         has_repos: bool,
                         comp_src_exists: bool,
                         enable_apt_caching: bool,
-                        dds_server_ip: str):
+                        dds_server_ip: str,
+                        rmw_implementation: str = 'fastdds',
+                        zenoh_router_endpoint: str = None):
         self.render(
             "Dockerfile.j2",
             out_path,
@@ -55,7 +57,9 @@ class TemplateRenderer:
             has_repos=has_repos,
             comp_src_exists=comp_src_exists,
             enable_apt_caching=enable_apt_caching,
-            dds_server_ip=dds_server_ip
+            dds_server_ip=dds_server_ip,
+            rmw_implementation=rmw_implementation,
+            zenoh_router_endpoint=zenoh_router_endpoint
         )
 
 
@@ -71,7 +75,7 @@ class TemplateRenderer:
             dds_server_host_ip=dds_server_host_ip
         )
 
-    def render_compose(self, out_path, components, cfg, host=None, dds_manager=None):
+    def render_compose(self, out_path, components, cfg, host=None, dds_manager=None, zenoh_manager=None):
         # Use dds_manager's effective_dds_ip if available, otherwise fall back to cfg.discovery_server
         discovery_server = dds_manager.effective_dds_ip if dds_manager else cfg.discovery_server
 
@@ -84,6 +88,11 @@ class TemplateRenderer:
             mount_root = os.path.abspath(os.path.join(cfg.root, cfg.build_dir))
         else:
             mount_root = host.effective_mount_root if host else cfg.mount_root
+
+        # Compute Zenoh router endpoint if using Zenoh
+        zenoh_router_endpoint = None
+        if cfg.is_zenoh and zenoh_manager:
+            zenoh_router_endpoint = f"tcp/{zenoh_manager.effective_dds_ip}:{cfg.zenoh_router_port}"
 
         self.render(
             "docker-compose.j2",
@@ -98,14 +107,20 @@ class TemplateRenderer:
             discovery_server = discovery_server,
             dds_manager       = dds_manager,
             has_common_packages = bool(cfg.common_packages),
-            is_localhost  = is_localhost,
             nvidia        = cfg.nvidia,
-            gui           = cfg.gui
+            gui           = cfg.gui,
             is_macos      = is_macos(),
-            is_localhost  = is_localhost
+            is_localhost  = is_localhost,
+            # RMW configuration
+            rmw_implementation = cfg.rmw_implementation,
+            rmw_implementation_value = cfg.rmw_implementation_value,
+            zenoh_manager = zenoh_manager,
+            zenoh_router_image = cfg.zenoh_router_image,
+            zenoh_router_port = cfg.zenoh_router_port,
+            zenoh_router_endpoint = zenoh_router_endpoint,
         )
 
-    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = [], apt_mirror: str = None, ros_apt_mirror: str = None):
+    def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = [], apt_mirror: str = None, ros_apt_mirror: str = None, base_image_override: str = None):
             """
             Render Dockerfile.base.j2 → out_path
 
@@ -118,6 +133,7 @@ class TemplateRenderer:
                 apt_packages: System apt packages to install
                 apt_mirror: Custom Ubuntu apt mirror URL (optional)
                 ros_apt_mirror: Custom ROS apt mirror URL (optional)
+                base_image_override: Override base image (e.g., nvidia/cuda:12.0-devel-ubuntu22.04)
             """
             self.render(
                 "Dockerfile.base.j2",
@@ -128,5 +144,6 @@ class TemplateRenderer:
                 workspace_dir= workspace_dir,
                 apt_packages = apt_packages or [],
                 apt_mirror   = apt_mirror,
-                ros_apt_mirror = ros_apt_mirror
+                ros_apt_mirror = ros_apt_mirror,
+                base_image_override = base_image_override
             )

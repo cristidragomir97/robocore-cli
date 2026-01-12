@@ -93,8 +93,14 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash \
 {% endif %}
 
 
-# DDS Discovery Server config
+# RMW Configuration
+{% if rmw_implementation == 'zenoh' %}
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ENV ZENOH_ROUTER={{ zenoh_router_endpoint }}
+{% else %}
+# FastDDS Discovery Server config
 COPY {{ superclient_path }} /superclient.xml
 ENV FASTRTPS_DEFAULT_PROFILES_FILE=/superclient.xml
 ENV ROS_DISCOVERY_SERVER={{ dds_server_ip }}:11811
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+{% endif %}

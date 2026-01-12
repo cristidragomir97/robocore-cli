@@ -174,37 +174,59 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
     manager_ip = manager_host.effective_dds_ip
     print(Fore.GREEN + f"[pixi] ✓ manager host: {manager_host.name} ({manager_ip})")
 
-    # 5) Check for persistent superclient.xml from stage command
+    # 5) Configure RMW based on implementation type
     forge_dir = os.path.join(pr, '.forge')
-    superclient_path = os.path.join(forge_dir, 'superclient.xml')
+    superclient_path = None
+    zenoh_endpoint = None
 
-    if not os.path.exists(superclient_path):
-        print(Fore.YELLOW + f"[pixi] WARNING: superclient.xml not found at {superclient_path}")
-        print(Fore.YELLOW + f"[pixi] Run 'forge stage' to generate it")
-        print(Fore.YELLOW + f"[pixi] Continuing with ROS_DISCOVERY_SERVER only...")
-        superclient_path = None
+    if cfg.is_zenoh:
+        # Zenoh configuration
+        zenoh_endpoint = f"tcp/{manager_ip}:{cfg.zenoh_router_port}"
+        print(Fore.GREEN + f"[pixi] ✓ RMW: Zenoh (rmw_zenoh_cpp)")
+        print(Fore.GREEN + f"[pixi] ✓ Zenoh router: {zenoh_endpoint}")
     else:
-        print(Fore.GREEN + f"[pixi] ✓ Using superclient.xml from {superclient_path}")
+        # FastDDS configuration - check for superclient.xml
+        superclient_path = os.path.join(forge_dir, 'superclient.xml')
+
+        if not os.path.exists(superclient_path):
+            print(Fore.YELLOW + f"[pixi] WARNING: superclient.xml not found at {superclient_path}")
+            print(Fore.YELLOW + f"[pixi] Run 'forge stage' to generate it")
+            print(Fore.YELLOW + f"[pixi] Continuing with ROS_DISCOVERY_SERVER only...")
+            superclient_path = None
+        else:
+            print(Fore.GREEN + f"[pixi] ✓ Using superclient.xml from {superclient_path}")
 
     # 6) Create activation script and launch shell
     print(Fore.CYAN + "\n[pixi] Launching shell with robostack environment...")
     print(Fore.CYAN + f"[pixi] ROS_DOMAIN_ID: {cfg.ros_domain_id}")
-    if superclient_path:
+
+    if cfg.is_zenoh:
+        print(Fore.CYAN + f"[pixi] RMW_IMPLEMENTATION: rmw_zenoh_cpp")
+        print(Fore.CYAN + f"[pixi] ZENOH_ROUTER: {zenoh_endpoint}")
+    elif superclient_path:
+        print(Fore.CYAN + f"[pixi] RMW_IMPLEMENTATION: rmw_fastrtps_cpp")
         print(Fore.CYAN + f"[pixi] FASTRTPS_DEFAULT_PROFILES_FILE: {superclient_path}")
         print(Fore.CYAN + f"[pixi] DDS Server: {manager_ip}:11811 (via superclient.xml)")
     else:
+        print(Fore.CYAN + f"[pixi] RMW_IMPLEMENTATION: rmw_fastrtps_cpp")
         print(Fore.CYAN + f"[pixi] ROS_DISCOVERY_SERVER: {manager_ip}:11811")
     print(Fore.CYAN + "\n[pixi] Type 'exit' to close the robostack shell\n")
 
-    # Build the DDS configuration lines
-    if superclient_path:
+    # Build the RMW configuration lines
+    if cfg.is_zenoh:
+        rmw_config = f"""export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+export ZENOH_ROUTER={zenoh_endpoint}"""
+        middleware_info = f"Zenoh Router: {zenoh_endpoint}"
+    elif superclient_path:
         # When using superclient.xml, don't set ROS_DISCOVERY_SERVER as it can conflict
-        dds_config = f"""export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+        rmw_config = f"""export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export FASTRTPS_DEFAULT_PROFILES_FILE={superclient_path}"""
+        middleware_info = f"DDS Server: {manager_ip}:11811"
     else:
         # Fallback to ROS_DISCOVERY_SERVER if no superclient.xml
-        dds_config = f"""export ROS_DISCOVERY_SERVER={manager_ip}:11811
+        rmw_config = f"""export ROS_DISCOVERY_SERVER={manager_ip}:11811
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp"""
+        middleware_info = f"DDS Server: {manager_ip}:11811"
 
     # Use a temporary directory for activation scripts
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -213,12 +235,12 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp"""
 # Activate pixi environment
 eval "$(pixi shell-hook)"
 
-# Set ROS and DDS environment variables
+# Set ROS and RMW environment variables
 export ROS_DOMAIN_ID={cfg.ros_domain_id}
 export ROS_DISTRO={cfg.ros_distro}
-{dds_config}
+{rmw_config}
 
-# Stop ROS 2 daemon to avoid DDS configuration conflicts
+# Stop ROS 2 daemon to avoid discovery conflicts
 echo "Stopping ROS 2 daemon (to avoid discovery conflicts)..."
 ros2 daemon stop 2>/dev/null || true
 
@@ -228,7 +250,8 @@ echo "  RoboStack Environment Active (pixi)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ROS Distribution: {cfg.ros_distro}"
 echo "  ROS Domain ID:    {cfg.ros_domain_id}"
-echo "  DDS Server:       {manager_ip}:11811"
+echo "  RMW:              {cfg.rmw_implementation_value}"
+echo "  {middleware_info}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 """

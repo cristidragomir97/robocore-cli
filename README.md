@@ -136,9 +136,17 @@ apt_packages:
   - vim
   - htop
 
-# DDS configuration
+# ROS Middleware (RMW) configuration
+rmw_implementation: fastdds           # Options: "fastdds" (default) or "zenoh"
+
+# FastDDS-specific (used when rmw_implementation: fastdds)
 enable_dds_router: false              # Enable DDS router container
 discovery_server: localhost           # Discovery server address
+
+# Zenoh-specific (used when rmw_implementation: zenoh)
+zenoh:
+  router_image: eclipse-zenoh/zenoh:latest  # Zenoh router Docker image
+  router_port: 7447                         # Zenoh router port
 ```
 
 **Required fields:**
@@ -155,8 +163,10 @@ discovery_server: localhost           # Discovery server address
 * **apt_mirror**: Custom Ubuntu apt mirror URL for faster downloads
 * **ros_apt_mirror**: Custom ROS apt mirror URL
 * **apt_packages**: System packages to install in base image
-* **enable_dds_router**: Enable DDS router container
-* **discovery_server**: DDS discovery server address
+* **rmw_implementation**: ROS middleware (`fastdds` or `zenoh`, default: `fastdds`)
+* **enable_dds_router**: Enable DDS router container (FastDDS only)
+* **discovery_server**: DDS discovery server address (FastDDS only)
+* **zenoh**: Zenoh configuration block (see below)
 
 ### 2. Hosts - Define the Machines in Your System
 
@@ -464,21 +474,61 @@ This approach however might quickly saturate your bandwidth, introducing latency
 ---
 
 ## Networking
-`forge` is designed to support robust, multi-host ROS 2 deployments by building on the DDS discovery protocol, using a structured yet flexible approach to communication between containers and physical machines. he goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
+`forge` is designed to support robust, multi-host ROS 2 deployments using a structured yet flexible approach to communication between containers and physical machines. The goal is to make multi-machine setups (like robot + workstation or multiple hosts running on the same system) behave as a single unified ROS 2 system, without requiring custom bridging, remapping, or brittle configuration hacks.
 
 By default, all containers launched by forge use host networking. This simplifies ROS 2 communication because:
-* DDS (specifically Fast DDS or Cyclone DDS) can directly use multicast, broadcast, and unicast to discover and connect nodes.
-* No need to expose individual container ports or deal with NAT and Docker’s virtual networks.
+* The middleware can directly use multicast, broadcast, and unicast to discover and connect nodes.
+* No need to expose individual container ports or deal with NAT and Docker's virtual networks.
 * Tools like `ros2 topic echo`, `rviz2`, or `ros2 node list` work out of the box across hosts—assuming firewalls and routes are properly configured.
 
-To avoid the limitations of peer-to-peer discovery at scale or in mixed-network setups, forge automatically provisions a Fast DDS Discovery Server container per robot network.
+Long story short, as long as your hosts are defined correctly in the config.yaml file, and are on the same subnet, the sky (and network bandwidth) is the limit. During development we recommend having all of the hosts connected by Ethernet or Fast WiFi such as 6E or 7.
+
+### ROS Middleware (RMW) Options
+
+forge supports two ROS 2 middleware implementations:
+
+#### FastDDS (Default)
+
+FastDDS is the default RMW implementation. forge automatically provisions a FastDDS Discovery Server to avoid the limitations of peer-to-peer discovery at scale.
+
+```yaml
+rmw_implementation: fastdds  # or omit entirely (fastdds is default)
+
+# Optional: Enable DDS router container
+enable_dds_router: false
+discovery_server: localhost
+```
 
 In this setup:
-* A discovery server container is launched on the robot or designated control node.
-* All other containers on the same host (and on other hosts) act as superclients and register with this server.
+* A discovery server container is launched on the manager host.
+* All other containers act as superclients and register with this server.
 * This centralizes discovery, reduces multicast traffic, and allows fine-grained control over discovery domains.
 
-Long story short, as long as your hosts are defined corectly in the config.yaml file, and are on the same subnet, the sky (and network bandwidth) is the limit. During development we reccomend having all of the hosts connected by Ethernet or Fast WiFi such as 6E or 7.
+#### Zenoh
+
+[Zenoh](https://zenoh.io/) is a modern pub/sub protocol that offers several advantages over traditional DDS:
+* **Lower latency**: Optimized for real-time communication
+* **Better WAN support**: Works seamlessly across networks and through firewalls
+* **Smaller footprint**: Lower memory and CPU usage
+* **Simpler configuration**: No complex QoS tuning required
+
+To use Zenoh:
+
+```yaml
+rmw_implementation: zenoh
+
+# Optional Zenoh configuration
+zenoh:
+  router_image: eclipse-zenoh/zenoh:latest  # Docker image for Zenoh router
+  router_port: 7447                          # Router listening port
+```
+
+When Zenoh is enabled:
+* A Zenoh router container is launched on the manager host
+* All component containers are configured with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`
+* The `ZENOH_ROUTER` environment variable points to the router endpoint
+
+**Note**: Zenoh requires the `rmw_zenoh_cpp` package to be available in your ROS 2 installation. This is included by default in ROS 2 Jazzy and later. For Humble/Iron, you may need to build it from source or use a RoboStack environment that includes it.
 
 ---
 

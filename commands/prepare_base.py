@@ -92,6 +92,7 @@ def prepare_base_main(project_root: str, config_file: str = 'config.yaml', force
         apt_packages=cfg.apt_packages,
         apt_mirror=cfg.apt_mirror,
         ros_apt_mirror=cfg.ros_apt_mirror,
+        base_image_override=cfg.base_image_override,
     )
 
     base_tag = f"{cfg.registry}/{cfg.image_prefix}_base:{cfg.ros_distro}-{cfg.tag}"

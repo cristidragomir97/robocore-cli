@@ -19,6 +19,21 @@ class Architecture(str, Enum):
     ARMV7 = "armv7"
 
 
+class RMWImplementation(str, Enum):
+    """Supported ROS Middleware implementations."""
+    FASTDDS = "fastdds"
+    ZENOH = "zenoh"
+
+
+class ZenohConfig(BaseModel):
+    """Zenoh-specific configuration."""
+    model_config = ConfigDict(extra='forbid')
+
+    router_image: str = Field("eclipse-zenoh/zenoh:latest", description="Zenoh router Docker image")
+    router_port: int = Field(7447, ge=1, le=65535, description="Zenoh router port")
+    config_file: Optional[str] = Field(None, description="Path to custom zenoh.json5 config")
+
+
 class HostConfig(BaseModel):
     """Configuration for a remote host."""
     model_config = ConfigDict(extra='forbid')
@@ -247,7 +262,11 @@ class ForgeConfig(BaseModel):
     docker_port: int = Field(2375, description="Docker daemon port")
     tag: str = Field('latest', description="Docker image tag")
 
-    # DDS configuration
+    # RMW (ROS Middleware) configuration
+    rmw_implementation: RMWImplementation = Field(RMWImplementation.FASTDDS, description="RMW implementation: fastdds or zenoh")
+    zenoh: Optional[ZenohConfig] = Field(default_factory=ZenohConfig, description="Zenoh configuration (used when rmw_implementation is zenoh)")
+
+    # DDS configuration (used when rmw_implementation is fastdds)
     enable_dds_router: bool = Field(False, description="Enable DDS router")
     discovery_server: str = Field('localhost', description="Discovery server address")
 
@@ -255,6 +274,9 @@ class ForgeConfig(BaseModel):
     local: bool = Field(False, description="Run all components locally instead of on remote hosts")
     nvidia: bool = Field(False, description="Enable NVIDIA GPU support globally")
     gui: bool = Field(False, description="Enable X11/GUI forwarding globally")
+
+    # Base image override (e.g., nvidia/cuda:12.0-devel-ubuntu22.04 instead of ubuntu:22.04)
+    base_image_override: Optional[str] = Field(None, description="Override the base image for Dockerfile.base (e.g., nvidia/cuda image)")
 
     # Apt mirror configuration
     apt_mirror: Optional[str] = Field(None, description="Custom Ubuntu apt mirror URL (e.g., 'http://mirrors.tuna.tsinghua.edu.cn/ubuntu')")
