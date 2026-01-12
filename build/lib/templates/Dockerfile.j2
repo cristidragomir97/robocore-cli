@@ -12,7 +12,9 @@ SHELL ["/bin/bash","-lc"]
 {% if apt_packages %}
 RUN apt-get update && apt-get install -y \
 {%- for pkg in apt_packages %}
-    {{ pkg }} \
+{%- if pkg and pkg.strip() %}
+    {{ pkg.strip() }} \
+{%- endif %}
 {%- endfor %} \
   && rm -rf /var/lib/apt/lists/*
 {% endif %}

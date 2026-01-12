@@ -9,11 +9,9 @@ SHELL ["/bin/bash","-lc"]
 #ENV ROS_WS=/ros_ws
 
 # 1) Install any component-specific system packages
-{% if apt_packages %}
-RUN apt-get update && apt-get install -y \
-{%- for pkg in apt_packages %}
-    {{ pkg }} \
-{%- endfor %} \
+{% set valid_apt_packages = apt_packages | select('string') | map('trim') | select | list %}
+{% if valid_apt_packages %}
+RUN apt-get update && apt-get install -y {%- for pkg in valid_apt_packages %} {{ pkg }} {%- endfor %} \
   && rm -rf /var/lib/apt/lists/*
 {% endif %}
 
@@ -81,6 +79,7 @@ RUN set -exo pipefail \
  && apt-get update \
  && source /opt/ros/$ROS_DISTRO/setup.bash \
  && source /ros_ws_common/install/setup.bash \
+ && rosdep init || true \
  && rosdep update \
  && echo '=== Checking what rosdep will install ===' \
  && rosdep keys --rosdistro $ROS_DISTRO --from-paths src --ignore-src | sort | uniq || echo 'No rosdep keys found' \
