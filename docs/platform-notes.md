@@ -85,9 +85,9 @@ Linux has full support for all forge features:
 
 Building ARM64 images on x86_64 Linux uses QEMU emulation, which is slow. Options:
 
-#### Option 1: Build on Device
+#### Option 1: Build on Device (Recommended)
 
-Set `build_on_device: true` for ARM64 hosts:
+Set `build_on_device: true` for ARM64 hosts. This builds **all images** (base, component, and workspaces) natively on the device:
 
 ```yaml
 hosts:
@@ -95,8 +95,15 @@ hosts:
     ip: jetson.local
     user: nvidia
     arch: arm64
-    build_on_device: true
+    build_on_device: true  # All builds happen on the Jetson
 ```
+
+When `build_on_device: true`:
+- `forge prep` builds the base image on the device
+- `forge stage` builds component images on the device
+- `forge build` compiles ROS workspaces on the device
+
+This is **much faster** than QEMU emulation (often 10x or more).
 
 #### Option 2: Use a Mac for ARM64 Builds
 

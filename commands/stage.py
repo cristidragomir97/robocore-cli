@@ -2,13 +2,14 @@
 import os
 import sys
 import yaml
+import shutil
 from collections import defaultdict
 from typing import List, Optional
 
 from colorama import Fore
 from core.config   import Config
 from core.renderer import TemplateRenderer
-from core.docker   import DockerHelper
+from core.docker   import DockerHelper, is_localhost
 from core.models   import Component, Host
 from python_on_whales.exceptions import DockerException
 
@@ -81,6 +82,32 @@ def get_host(hosts_map: dict, comp: Component, cfg: Config) -> Host:
     if not host:
         sys.exit(f"[stage] ERROR: runs_on '{comp.runs_on}' not defined")
     return host
+
+
+def copy_component_sources(source_packages: List[tuple], cfg: Config, comp_dir: str):
+    """
+    Copy component source packages into the build context.
+    Creates .forge/workspaces/<comp>/src/ with all source packages.
+
+    Args:
+        source_packages: List of (relative_path, package_name) tuples
+        cfg: Config object
+        comp_dir: Component's workspace directory (.forge/workspaces/<comp>/)
+    """
+    src_dir = os.path.join(comp_dir, "src")
+
+    # Clean and recreate src directory
+    if os.path.exists(src_dir):
+        shutil.rmtree(src_dir)
+    os.makedirs(src_dir, exist_ok=True)
+
+    # Copy each source package
+    for rel_path, pkg_name in source_packages:
+        abs_source = os.path.join(cfg.root, rel_path)
+        if os.path.exists(abs_source) and os.path.isdir(abs_source):
+            dest = os.path.join(src_dir, pkg_name)
+            print(f"  - copying {pkg_name}")
+            shutil.copytree(abs_source, dest, symlinks=False)
 
 def build_component_image(comp: Component,
                           cfg: Config,
@@ -184,7 +211,7 @@ def build_component_image(comp: Component,
         else:
             sys.exit("[stage] ERROR: No hosts defined in config.")
 
-    # Handle VCS repositories
+    # Handle VCS repositories - write repos.yaml directly in comp_dir
     repos_file = os.path.join(comp_dir, "repos.yaml")
     if feats["has_repos"]:
         repo_map = {
@@ -194,9 +221,11 @@ def build_component_image(comp: Component,
         with open(repos_file, "w") as f:
             yaml.safe_dump({"repositories": repo_map}, f, default_flow_style=False, sort_keys=False)
 
-    repos_file_rel = os.path.relpath(repos_file, cfg.root) if feats["has_repos"] else ""
+    # Copy source packages into build context
+    if feats["source_packages"]:
+        copy_component_sources(feats["source_packages"], cfg, comp_dir)
+
     superclient_path = os.path.join(comp_dir, "superclient.xml")
-    superclient_rel = os.path.relpath(superclient_path, cfg.root)
 
     # Only generate superclient.xml when using FastDDS
     if cfg.is_fastdds:
@@ -220,8 +249,8 @@ def build_component_image(comp: Component,
         ros_domain_id=cfg.ros_domain_id,
         comp=comp,
         source_packages=feats["source_packages"],
-        repos_file=repos_file_rel,
-        superclient_path=superclient_rel if cfg.is_fastdds else "",
+        repos_file="repos.yaml",  # Now relative to comp_dir
+        superclient_path="superclient.xml" if cfg.is_fastdds else "",  # Now relative to comp_dir
         apt_packages=comp.apt_packages or [],
         pip_packages=comp.pip_packages or [],
         postinstall=comp.postinstall or [],
@@ -238,16 +267,27 @@ def build_component_image(comp: Component,
 
     img_tag = comp.image_tag(cfg)
     platform = f"linux/{host.arch}"
-    print(f"[stage] Building '{comp.name}' → {img_tag} for [{platform}]")
 
-    # Use absolute paths for context and dockerfile
-    docker.build_multiarch(
-        image_tag=img_tag,
-        context=cfg.root,
-        dockerfile=dockerfile_path,
-        platforms=[platform],
-        push=True
-    )
+    # Check if we should build on device
+    if host.build_on_device and not is_localhost(host):
+        print(f"[stage] Building '{comp.name}' → {img_tag} on device {host.name} ({host.arch})")
+        docker.build_on_remote_host(
+            host=host,
+            image_tag=img_tag,
+            context=comp_dir,
+            dockerfile=dockerfile_path,
+            push=False
+        )
+    else:
+        print(f"[stage] Building '{comp.name}' → {img_tag} for [{platform}]")
+        # Use comp_dir as context (self-contained build context)
+        docker.build_multiarch(
+            image_tag=img_tag,
+            context=comp_dir,
+            dockerfile=dockerfile_path,
+            platforms=[platform],
+            push=True
+        )
 
     return {
         "name": comp.name,
@@ -316,11 +356,13 @@ def stage_main(project_root: str,
                 comp, cfg, hosts_map, base_tag, renderer, docker,
                 participant_id=participant_id
             )
-            try:
-                docker.pull_image_on_host(host, base_tag)
-            except DockerException:
-                print(Fore.RED + f"[stage] Failed to pull base image on host '{host.name}' ({host.ip})", file=sys.stderr)
-                raise
+            # Skip pull if building on device (image is already there)
+            if not (host.build_on_device and not is_localhost(host)):
+                try:
+                    docker.pull_image_on_host(host, base_tag)
+                except DockerException:
+                    print(Fore.RED + f"[stage] Failed to pull base image on host '{host.name}' ({host.ip})", file=sys.stderr)
+                    raise
             staged.append(entry)
 
         staged_by_host[host_name] = staged

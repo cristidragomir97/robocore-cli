@@ -95,7 +95,7 @@ hosts:
 | `manager` | No | Set to `true` to designate this host as the middleware router |
 | `dds_ip` | No | Alternative IP for DDS/Zenoh communication (useful for multi-NIC setups) |
 | `mount_root` | No | Per-host override for build artifact directory |
-| `build_on_device` | No | Build components on this device instead of locally (faster for cross-arch) |
+| `build_on_device` | No | Build base images, component images, and workspaces natively on this device instead of using slow QEMU emulation locally (much faster for ARM64 targets) |
 
 ---
 

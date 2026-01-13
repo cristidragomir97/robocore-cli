@@ -198,9 +198,9 @@ When a component targets a different architecture than your dev machine:
 
 Forge uses Docker's buildx with QEMU emulation. This is slower but requires no setup on the target device.
 
-### Option 2: Native Build on Device
+### Option 2: Native Build on Device (Recommended)
 
-Set `build_on_device: true` on the host to build directly on the target:
+Set `build_on_device: true` on the host to build everything directly on the target:
 
 ```yaml
 hosts:
@@ -208,10 +208,15 @@ hosts:
     ip: jetson.local
     user: nvidia
     arch: arm64
-    build_on_device: true   # Build on the Jetson itself
+    build_on_device: true   # All builds happen on the Jetson
 ```
 
-This is faster for ARM64 targets when building on x86_64.
+When enabled, all build operations happen natively on the device:
+- **Base images** (forge prep) are built on the device
+- **Component images** (forge stage) are built on the device
+- **ROS workspaces** (forge build) are compiled on the device
+
+This is **much faster** for ARM64 targets when your dev machine is x86_64 (often 10x or more).
 
 ---
 

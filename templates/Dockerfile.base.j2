@@ -90,14 +90,10 @@ EOF
 RUN vcs import src < /tmp/repos.yaml
 {% endif %}
 
-# Local source-based packages: copy directly
-{% for pkg in common_pkgs %}
-{% if pkg.is_local_based %}
-{% for src_path in pkg.source %}
-COPY {{ src_path }} /ros_ws_common/src/
-{% endfor %}
+# Local source-based packages: copy from context src/ folder
+{% if has_local %}
+COPY src/ /ros_ws_common/src/
 {% endif %}
-{% endfor %}
 
 # Install dependencies with rosdep
 RUN rosdep update && \

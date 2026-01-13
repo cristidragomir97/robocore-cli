@@ -59,7 +59,9 @@ Building ARM64 images on x86_64 is slow due to QEMU emulation. Solutions:
 
 If available, Macs with M1/M2/M3 chips build ARM64 natively.
 
-#### Build on Device
+#### Build on Device (Recommended for x86_64 hosts)
+
+Set `build_on_device: true` to build everything natively on the target device:
 
 ```yaml
 hosts:
@@ -67,8 +69,15 @@ hosts:
     ip: jetson.local
     user: nvidia
     arch: arm64
-    build_on_device: true  # Build directly on Jetson
+    build_on_device: true  # All builds happen on the Jetson
 ```
+
+This affects all build steps:
+- **prep**: Base image is built on the device
+- **stage**: Component images are built on the device
+- **build**: ROS workspace is compiled on the device
+
+The build context is synced to the device via rsync, built there, and pushed to the registry. This is typically 10x faster than QEMU emulation.
 
 #### Use Build Cache
 

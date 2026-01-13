@@ -27,7 +27,7 @@ RUN pip3 install --no-cache-dir {% if ros_distro == 'jazzy' %}--break-system-pac
 RUN mkdir -p /vcs_ws/src
 
 # ─── Import repos.yaml ────────────────────────────────────────────────────
-COPY {{ repos_file }} /vcs_ws/repos.yaml
+COPY repos.yaml /vcs_ws/repos.yaml
 
 # Install vcstool if needed
 RUN apt-get update && apt-get install -y python3-vcstool && rm -rf /var/lib/apt/lists/*
@@ -63,10 +63,8 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash \
 WORKDIR /ros_ws
 RUN mkdir -p src
 
-# Copy source packages directly from their original locations
-{% for src_path, pkg_name in source_packages %}
-COPY {{ src_path }} /ros_ws/src/{{ pkg_name }}
-{% endfor %}
+# Copy source packages from context src/ folder
+COPY src/ /ros_ws/src/
 
 # Verify we have actual files
 RUN echo '=== Checking source directory structure ===' \
@@ -99,7 +97,7 @@ ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
 ENV ZENOH_ROUTER={{ zenoh_router_endpoint }}
 {% else %}
 # FastDDS Discovery Server config
-COPY {{ superclient_path }} /superclient.xml
+COPY superclient.xml /superclient.xml
 ENV FASTRTPS_DEFAULT_PROFILES_FILE=/superclient.xml
 ENV ROS_DISCOVERY_SERVER={{ dds_server_ip }}:11811
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
