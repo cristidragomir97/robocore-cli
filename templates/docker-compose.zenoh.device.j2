@@ -1,0 +1,147 @@
+version: '3.8'
+networks:
+  ros_net:
+    driver: bridge
+services:
+{% for comp in components %}
+  {{ comp.name }}:
+    image: {{ comp.image }}
+    networks:
+      - ros_net
+    {% if comp.stdin_open %}
+    stdin_open: true
+    {% endif %}
+    {% if comp.tty %}
+    tty: true
+    {% endif %}
+    {% if comp.privileged %}
+    privileged: true
+    {% endif %}
+    {% if comp.runtime %}
+    runtime: {{ comp.runtime }}
+    {% endif %}
+    {% if comp.comp_src or comp.mount_shm or comp.gui or comp.volumes %}
+    volumes:
+      {% if comp.comp_src %}
+      - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:rw"
+      {% endif %}
+      {% if comp.mount_shm %}
+      - "/dev/shm:/dev/shm:rw"
+      {% endif %}
+      {% if comp.gui %}
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro"
+      {% endif %}
+      {% for vol in comp.volumes %}
+      - "{{ vol }}"
+      {% endfor %}
+    {% endif %}
+    {% if comp.devices %}
+    devices:
+      {% for dev in comp.devices %}
+      - "{{ dev }}"
+      {% endfor %}
+    {% endif %}
+    {% if comp.devices or comp.rt_enabled %}
+    cap_add:
+      {% if comp.devices %}
+      - SYS_RAWIO
+      - NET_ADMIN
+      {% endif %}
+      {% if comp.rt_enabled %}
+      - IPC_LOCK
+      - SYS_NICE
+      {% endif %}
+    {% endif %}
+    {% if comp.rt_enabled %}
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      rtprio: 99
+      nice: -20
+    {% endif %}
+    {% if comp.ports %}
+    ports:
+      {% for port in comp.ports %}
+      - "{{ port }}"
+      {% endfor %}
+    {% endif %}
+    environment:
+      - ROS_DOMAIN_ID={{ ros_domain_id }}
+      - ROS_DISTRO={{ ros_distro }}
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+      - ZENOH_ROUTER_CHECK_ATTEMPTS=10
+      - ZENOH_CONFIG_OVERRIDE=listen/endpoints=["tcp/0.0.0.0:0"];connect/endpoints=["tcp/zenoh_router:{{ zenoh_router_port }}"]
+      {% if comp.gui %}
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      {% endif %}
+      {% if comp.nvidia %}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      {% endif %}
+      {% for key, value in comp.environment.items() %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+    {% if comp.shm_size %}
+    shm_size: {{ comp.shm_size }}
+    {% endif %}
+    {% if comp.ipc_mode %}
+    ipc: {{ comp.ipc_mode }}
+    {% endif %}
+    {% if comp.cpuset %}
+    cpuset: "{{ comp.cpuset }}"
+    {% endif %}
+    {% if comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              {% if comp.gpu_count %}
+              count: {{ comp.gpu_count }}
+              {% elif comp.gpu_device_ids %}
+              device_ids: [{{ comp.gpu_device_ids|join(', ') }}]
+              {% else %}
+              count: all
+              {% endif %}
+              capabilities: [gpu]
+    {% endif %}
+    {% if comp.entrypoint %}
+    command: bash -lc "source /opt/ros/{{ ros_distro }}/setup.bash{% if has_common_packages %} && source /ros_ws_common/install/setup.bash{% endif %}{% if comp.has_repos %} && source /vcs_ws/install/setup.bash{% endif %}{% if comp.comp_src %} && source /ros_ws/install/setup.bash{% endif %} && {{ comp.entrypoint }} {{ comp.launch_args }}"
+    {% else %}
+    command: bash -lc "source /opt/ros/{{ ros_distro }}/setup.bash{% if has_common_packages %} && source /ros_ws_common/install/setup.bash{% endif %}{% if comp.has_repos %} && source /vcs_ws/install/setup.bash{% endif %}{% if comp.comp_src %} && source /ros_ws/install/setup.bash{% endif %} && tail -f /dev/null"
+    {% endif %}
+    depends_on:
+      - zenoh_router
+{% endfor %}
+  zenoh_router:
+    image: {{ zenoh_router_image }}
+    container_name: zenoh_router
+    networks:
+      - ros_net
+    restart: unless-stopped
+    ports:
+      - "{{ zenoh_router_port }}:{{ zenoh_router_port }}"
+    command: --listen tcp/0.0.0.0:{{ zenoh_router_port }}
+{% set named_volumes = [] %}
+{% for comp in components %}
+{% for vol in comp.volumes %}
+{% set vol_source = vol.split(':')[0] %}
+{% if not vol_source.startswith('/') and not vol_source.startswith('.') and not vol_source.startswith('$') and not vol_source.startswith('~') %}
+{% if vol_source not in named_volumes %}
+{% set _ = named_volumes.append(vol_source) %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if named_volumes %}
+
+volumes:
+{% for vol_name in named_volumes %}
+  {{ vol_name }}:
+{% endfor %}
+{% endif %}

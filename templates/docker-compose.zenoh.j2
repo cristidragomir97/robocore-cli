@@ -1,20 +1,13 @@
 version: '3.8'
+networks:
+  ros_net:
+    driver: bridge
 services:
-{# ─── FastDDS Router (optional, when using FastDDS) ─────────────────────────── #}
-{% if rmw_implementation == 'fastdds' and enable_dds_router %}
-  dds_router:
-    image: dragomirxyz/fastdds_server:latest
-    container_name: dds_router
-    network_mode: host
-    restart: unless-stopped
-    environment:
-      - ROS_DOMAIN_ID=0
-      - ROS_DISCOVERY_SERVER={{ discovery_server }}
-{% endif %}
 {% for comp in components %}
   {{ comp.name }}:
     image: {{ comp.image }}
-    network_mode: host
+    networks:
+      - ros_net
     {% if comp.stdin_open %}
     stdin_open: true
     {% endif %}
@@ -27,7 +20,7 @@ services:
     {% if comp.runtime %}
     runtime: {{ comp.runtime }}
     {% endif %}
-    {% if comp.comp_src or comp.mount_shm or gui or comp.gui or comp.volumes %}
+    {% if comp.comp_src or comp.mount_shm or comp.gui or comp.volumes %}
     volumes:
       {% if comp.comp_src %}
       - "{{ mount_root }}/{{ comp.name }}/ros_ws:/ros_ws:rw"
@@ -37,10 +30,8 @@ services:
       {% endif %}
       {% if comp.gui %}
       {% if is_macos %}
-      # macOS: X11 forwarding via XQuartz socket
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       {% else %}
-      # Linux: X11 socket mount
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       - "${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro"
       {% endif %}
@@ -51,24 +42,24 @@ services:
     {% endif %}
     {% if comp.devices %}
     devices:
-        {% for dev in comp.devices %}
-        - "{{ dev }}"
-        {% endfor %}
+      {% for dev in comp.devices %}
+      - "{{ dev }}"
+      {% endfor %}
     {% endif %}
     {% if comp.devices or comp.rt_enabled %}
     cap_add:
       {% if comp.devices %}
-        - SYS_RAWIO
-        - NET_ADMIN
+      - SYS_RAWIO
+      - NET_ADMIN
       {% endif %}
       {% if comp.rt_enabled %}
-        - IPC_LOCK
-        - SYS_NICE
+      - IPC_LOCK
+      - SYS_NICE
       {% endif %}
     {% endif %}
     {% if comp.rt_enabled %}
     security_opt:
-        - seccomp:unconfined
+      - seccomp:unconfined
     ulimits:
       memlock:
         soft: -1
@@ -80,28 +71,23 @@ services:
     ports:
       {% for port in comp.ports %}
       - "{{ port }}"
-        {% endfor %}
+      {% endfor %}
     {% endif %}
     environment:
       - ROS_DOMAIN_ID={{ ros_domain_id }}
       - ROS_DISTRO={{ ros_distro }}
-      - RMW_IMPLEMENTATION={{ rmw_implementation_value }}
-      {% if rmw_implementation == 'zenoh' %}
-      - ZENOH_ROUTER={{ zenoh_router_endpoint }}
-      {% else %}
-      - ROS_DISCOVERY_SERVER={{ discovery_server }}
-      {% endif %}
-      {% if gui or comp.gui %}
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+      - ZENOH_ROUTER_CHECK_ATTEMPTS=10
+      - ZENOH_CONFIG_OVERRIDE=listen/endpoints=["tcp/0.0.0.0:0"];connect/endpoints=["tcp/zenoh_router:{{ zenoh_router_port }}"]
+      {% if comp.gui %}
       {% if is_macos %}
-      # macOS: Use host.docker.internal for XQuartz
       - DISPLAY=host.docker.internal:0
       {% else %}
-      # Linux: Use host DISPLAY
       - DISPLAY=${DISPLAY}
       {% endif %}
       - QT_X11_NO_MITSHM=1
       {% endif %}
-      {% if nvidia or comp.nvidia %}
+      {% if comp.nvidia %}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       {% endif %}
@@ -117,7 +103,7 @@ services:
     {% if comp.cpuset %}
     cpuset: "{{ comp.cpuset }}"
     {% endif %}
-    {% if nvidia or comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
+    {% if comp.nvidia or comp.gpu_count or comp.gpu_device_ids %}
     deploy:
       resources:
         reservations:
@@ -133,64 +119,22 @@ services:
               capabilities: [gpu]
     {% endif %}
     {% if comp.entrypoint %}
-    command: >
-      bash -lc "\
-        # always source core ROS
-        source /opt/ros/{{ ros_distro }}/setup.bash && \
-        {%- if has_common_packages -%}
-        # source common packages from base image
-        source /ros_ws_common/install/setup.bash && \
-        {%- endif -%}
-
-        {%- if comp.has_repos -%}
-        source /vcs_ws/install/setup.bash && \
-        {%- endif -%}
-        {%- if comp.comp_src -%}
-        source /ros_ws/install/setup.bash && \
-        {%- endif -%}
-        {{ comp.entrypoint }} {{ comp.launch_args }}
-      "
+    command: bash -lc "source /opt/ros/{{ ros_distro }}/setup.bash{% if has_common_packages %} && source /ros_ws_common/install/setup.bash{% endif %}{% if comp.has_repos %} && source /vcs_ws/install/setup.bash{% endif %}{% if comp.comp_src %} && source /ros_ws/install/setup.bash{% endif %} && {{ comp.entrypoint }} {{ comp.launch_args }}"
     {% else %}
-    command: >
-      bash -lc "\
-        # always source core ROS
-        source /opt/ros/{{ ros_distro }}/setup.bash && \
-        {%- if has_common_packages -%}
-        # source common packages from base image
-        source /ros_ws_common/install/setup.bash && \
-        {%- endif -%}
-
-        {%- if comp.has_repos -%}
-        source /vcs_ws/install/setup.bash && \
-        {%- endif -%}
-        {%- if comp.comp_src -%}
-        source /ros_ws/install/setup.bash && \
-        {%- endif -%}
-        tail -f /dev/null
-      "
+    command: bash -lc "source /opt/ros/{{ ros_distro }}/setup.bash{% if has_common_packages %} && source /ros_ws_common/install/setup.bash{% endif %}{% if comp.has_repos %} && source /vcs_ws/install/setup.bash{% endif %}{% if comp.comp_src %} && source /ros_ws/install/setup.bash{% endif %} && tail -f /dev/null"
     {% endif %}
+    depends_on:
+      - zenoh_router
 {% endfor %}
-{# ─── Middleware Router Service ─────────────────────────────────────────────── #}
-{% if rmw_implementation == 'zenoh' and zenoh_manager %}
   zenoh_router:
     image: {{ zenoh_router_image }}
     container_name: zenoh_router
-    network_mode: host
+    networks:
+      - ros_net
     restart: unless-stopped
-    command: --listen tcp/{{ zenoh_manager.effective_dds_ip }}:{{ zenoh_router_port }}
-{% elif rmw_implementation == 'fastdds' and dds_manager %}
-  dds_server:
-    image: {{ base_image }}
-    container_name: dds_server
-    network_mode: host
-    environment:
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    command: >
-      bash -lc "
-        source /opt/ros/{{ ros_distro }}/setup.bash &&
-        fastdds discovery -i 0 -l {{ dds_manager.effective_dds_ip }} -p 11811
-      "
-{% endif %}
+    ports:
+      - "{{ zenoh_router_port }}:{{ zenoh_router_port }}"
+    command: --listen tcp/0.0.0.0:{{ zenoh_router_port }}
 {% set named_volumes = [] %}
 {% for comp in components %}
 {% for vol in comp.volumes %}

@@ -75,49 +75,46 @@ class TemplateRenderer:
             dds_server_host_ip=dds_server_host_ip
         )
 
-    def render_compose(self, out_path, components, cfg, host=None, dds_manager=None, zenoh_manager=None):
-        # Use dds_manager's effective_dds_ip if available, otherwise fall back to cfg.discovery_server
-        discovery_server = dds_manager.effective_dds_ip if dds_manager else cfg.discovery_server
+    def render_compose(self, out_path, components, cfg, host=None, build_on_device=False):
+        # Determine discovery server IP (use host IP for manager, or localhost)
+        manager_host = next((h for h in cfg.hosts if h.manager), None)
+        if not manager_host and cfg.hosts:
+            manager_host = cfg.hosts[0]
+        discovery_server = manager_host.effective_dds_ip if manager_host else "localhost"
 
         # Check if host is localhost
         is_localhost = host and host.ip in ('localhost', '127.0.0.1', '::1')
 
         # For localhost, use local build directory; otherwise use remote mount_root
         if is_localhost:
-            # Use absolute path to local build directory
             mount_root = os.path.abspath(os.path.join(cfg.root, cfg.build_dir))
         else:
             mount_root = host.effective_mount_root if host else cfg.mount_root
 
-        # Compute Zenoh router endpoint if using Zenoh
-        zenoh_router_endpoint = None
-        if cfg.is_zenoh and zenoh_manager:
-            zenoh_router_endpoint = f"tcp/{zenoh_manager.effective_dds_ip}:{cfg.zenoh_router_port}"
+        # Select template based on RMW implementation and build mode
+        if cfg.is_zenoh:
+            template_name = "docker-compose.zenoh.device.j2" if build_on_device else "docker-compose.zenoh.j2"
+        else:
+            template_name = "docker-compose.fastdds.device.j2" if build_on_device else "docker-compose.fastdds.j2"
+
+        # Zenoh router IP
+        zenoh_router_ip = manager_host.effective_dds_ip if manager_host else "localhost"
 
         self.render(
-            "docker-compose.j2",
+            template_name,
             out_path,
             components    = components,
             mount_root    = mount_root,
             ros_distro    = cfg.ros_distro,
             ros_domain_id = cfg.ros_domain_id,
-            registry      = cfg.registry,
             base_image    = cfg.base_image,
-            enable_dds_router = cfg.enable_dds_router,
             discovery_server = discovery_server,
-            dds_manager       = dds_manager,
             has_common_packages = bool(cfg.common_packages),
-            nvidia        = cfg.nvidia,
-            gui           = cfg.gui,
             is_macos      = is_macos(),
             is_localhost  = is_localhost,
-            # RMW configuration
-            rmw_implementation = cfg.rmw_implementation,
-            rmw_implementation_value = cfg.rmw_implementation_value,
-            zenoh_manager = zenoh_manager,
             zenoh_router_image = cfg.zenoh_router_image,
             zenoh_router_port = cfg.zenoh_router_port,
-            zenoh_router_endpoint = zenoh_router_endpoint,
+            zenoh_router_ip = zenoh_router_ip,
         )
 
     def render_base(self, out_path: str, ros_distro: str, ubuntu: str, common_pkgs, workspace_dir: str = "ros_ws", apt_packages = [], apt_mirror: str = None, ros_apt_mirror: str = None, base_image_override: str = None):

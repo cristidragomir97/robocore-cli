@@ -67,9 +67,12 @@ def create_parser():
     pl = sp.add_parser('launch', help='Rsync builds & launch containers')
     pl.add_argument('--host', default=None,
                     help='Only launch on this host (name from config file)')
+    pl.add_argument('--no-pull', action='store_true',
+                    help='Skip pulling images (use existing local images)')
     pl.set_defaults(func=lambda args: launch_main(
         project_root=args.project_root,
         host_name=args.host,
+        no_pull=args.no_pull,
         config_file=args.config_file
     ))
 

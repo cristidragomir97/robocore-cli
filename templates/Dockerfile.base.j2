@@ -41,11 +41,11 @@ ENV LC_ALL=en_US.UTF-8
 {% if ros_apt_mirror %}
 # Using custom ROS apt mirror: {{ ros_apt_mirror }}
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
-    sh -c 'echo "deb [trusted=yes] [arch=$(dpkg --print-architecture)]  {{ ros_apt_mirror }} $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+    sh -c 'echo "deb [trusted=yes arch=$(dpkg --print-architecture)] {{ ros_apt_mirror }} {{ ubuntu }} main" > /etc/apt/sources.list.d/ros2-latest.list'
 {% else %}
 # Using default ROS apt mirror (packages.ros.org)
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
-    sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+    sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu {{ ubuntu }} main" > /etc/apt/sources.list.d/ros2-latest.list'
 {% endif %}
 
 # Install ROS2 base + build tools

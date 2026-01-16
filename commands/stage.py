@@ -325,33 +325,40 @@ def stage_main(project_root: str,
 
     cfg = Config.load(project_root, config_file=config_file)
     hosts_map = {h.name: h for h in cfg.hosts}
-    comps = cfg.filter_components(name=component)
-    if not comps:
+
+    # Filter components for building (may be single component with -c)
+    comps_to_build = cfg.filter_components(name=component)
+    if not comps_to_build:
         sys.exit(f"[stage] ERROR: no components to stage (filter={component})")
+
+    # All components (for compose file generation)
+    all_comps = cfg.components
+    comps_to_build_names = {c.name for c in comps_to_build}
 
     tpl_dir = os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..', 'templates'))
     renderer = TemplateRenderer(tpl_dir)
     docker = DockerHelper()
 
-    # Group components per host
-    components_by_host = defaultdict(list)
-    for comp in comps:
-        components_by_host[comp.runs_on].append(comp)
+    # Group ALL components per host (for compose files)
+    all_components_by_host = defaultdict(list)
+    for comp in all_comps:
+        all_components_by_host[comp.runs_on].append(comp)
 
-    # Build base image once for all platforms
-    from commands.prepare_base import prepare_base_main
-    prepare_base_main(project_root, config_file=config_file, force=force_base)
     base_tag = cfg.base_image
 
-    staged_by_host = {}
+    # If refresh mode, skip all building and just regenerate compose files
+    if refresh:
+        print("[stage] Refresh mode: skipping builds, regenerating compose files only")
+    else:
+        # Build base image once for all platforms
+        from commands.prepare_base import prepare_base_main
+        prepare_base_main(project_root, config_file=config_file, force=force_base)
 
-    for host_name, host_comps in components_by_host.items():
-        host = hosts_map[host_name]
-        staged = []
-
-        for j, comp in enumerate(host_comps):
-            participant_id = j + 2  # Start from 2
+        # Only build filtered components
+        for comp in comps_to_build:
+            host = hosts_map[comp.runs_on]
+            participant_id = 2  # TODO: proper participant ID
             entry = build_component_image(
                 comp, cfg, hosts_map, base_tag, renderer, docker,
                 participant_id=participant_id
@@ -363,11 +370,41 @@ def stage_main(project_root: str,
                 except DockerException:
                     print(Fore.RED + f"[stage] Failed to pull base image on host '{host.name}' ({host.ip})", file=sys.stderr)
                     raise
-            staged.append(entry)
 
+    # Generate staged entries for ALL components (for compose files)
+    staged_by_host = {}
+    for host_name, host_comps in all_components_by_host.items():
+        staged = []
+        for j, comp in enumerate(host_comps):
+            feats = detect_component_features(comp, cfg)
+            staged.append({
+                "name": comp.name,
+                "image": comp.image_tag(cfg),
+                "devices": comp.devices,
+                "ports": comp.ports,
+                "environment": comp.environment,
+                "entrypoint": comp.entrypoint,
+                "launch_args": comp.launch_args,
+                "has_repos": feats["has_repos"],
+                "comp_src": feats["comp_src_exists"],
+                "shm_size": comp.shm_size,
+                "ipc_mode": comp.ipc_mode,
+                "cpuset": comp.cpuset,
+                "mount_shm": comp.mount_shm,
+                "rt_enabled": comp.rt_enabled,
+                "privileged": comp.privileged,
+                "runtime": comp.runtime,
+                "gpu_count": comp.gpu_count,
+                "gpu_device_ids": comp.gpu_device_ids,
+                "nvidia": comp.nvidia,
+                "gui": comp.gui,
+                "volumes": comp.volumes,
+                "stdin_open": comp.stdin_open,
+                "tty": comp.tty,
+            })
         staged_by_host[host_name] = staged
 
-    # Find manager host for compose files (used for DDS server or Zenoh router)
+    # Find manager host (used for DDS server or Zenoh router)
     manager_host = next((h for h in cfg.hosts if h.manager), None)
     if not manager_host and len(cfg.hosts) > 0:
         manager_host = cfg.hosts[0]
@@ -377,10 +414,9 @@ def stage_main(project_root: str,
         host = hosts_map[host_name]
         compose_name = f"docker-compose.{host_name}.yaml"
         out_path = os.path.join(".", compose_name)
-        # Only include middleware router section in the manager host's compose file
-        host_dds_manager = manager_host if (host.manager and cfg.is_fastdds) else None
-        host_zenoh_manager = manager_host if (host.manager and cfg.is_zenoh) else None
-        renderer.render_compose(out_path, staged_comps, cfg, host=host, dds_manager=host_dds_manager, zenoh_manager=host_zenoh_manager)
+        # Check if this host uses build_on_device
+        build_on_device = host.build_on_device and not is_localhost(host)
+        renderer.render_compose(out_path, staged_comps, cfg, host=host, build_on_device=build_on_device)
         print(f"[stage] Wrote '{compose_name}'")
 
     # Generate local development config based on RMW implementation

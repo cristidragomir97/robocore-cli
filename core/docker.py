@@ -20,22 +20,16 @@ class DockerHelper:
 
     def pull_image_on_host(self, host, image):
         """
-        Pulls a Docker image on a remote host.
-        :param host: The remote host object with 'ip' and 'port' attributes.
+        Pulls a Docker image on a host.
+        :param host: The remote host object with 'ip', 'port' attributes.
         :param image: The Docker image to pull.
         """
-        # Check if host is localhost
-        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
-
-        if is_localhost:
-            # Use local Docker daemon
-            cc = DockerClient()
+        if is_localhost(host):
+            self.client.pull(image)
         else:
-            # Connect to remote Docker daemon via TCP
             url = f"tcp://{host.ip}:{host.port}"
             cc = DockerClient(host=url)
-
-        cc.pull(image)
+            cc.pull(image)
 
     def build_multiarch(self, image_tag, context, dockerfile, platforms, push=True, logger=None):
         """
@@ -120,31 +114,21 @@ class DockerHelper:
             cc.compose.up(detach=detach)
 
     def compose_up_remote(self, host, compose_file, services=None):
-        # Check if host is localhost
-        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
-
-        if is_localhost:
-            # Use local Docker daemon
+        """Start compose services on a host."""
+        if is_localhost(host):
             cc = DockerClient(compose_files=[compose_file])
         else:
-            # Connect to remote Docker daemon via TCP
             url = f"tcp://{host.ip}:{host.port}"
             cc = DockerClient(host=url, compose_files=[compose_file])
-
         cc.compose.up(detach=False)
 
     def compose_down_remote(self, host, compose_file):
-        # Check if host is localhost
-        is_localhost = host.ip in ('localhost', '127.0.0.1', '::1')
-
-        if is_localhost:
-            # Use local Docker daemon
+        """Stop compose services on a host."""
+        if is_localhost(host):
             cc = DockerClient(compose_files=[compose_file])
         else:
-            # Connect to remote Docker daemon via TCP
             url = f"tcp://{host.ip}:{host.port}"
             cc = DockerClient(host=url, compose_files=[compose_file])
-
         cc.compose.down()
 
     def build_on_remote_host(self, host, image_tag: str, context: str, dockerfile: str, push: bool = True):

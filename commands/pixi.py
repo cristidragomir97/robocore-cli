@@ -202,7 +202,7 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
 
     if cfg.is_zenoh:
         print(Fore.CYAN + f"[pixi] RMW_IMPLEMENTATION: rmw_zenoh_cpp")
-        print(Fore.CYAN + f"[pixi] ZENOH_ROUTER: {zenoh_endpoint}")
+        print(Fore.CYAN + f"[pixi] ZENOH_CONFIG_OVERRIDE: listen + connect to {zenoh_endpoint}")
     elif superclient_path:
         print(Fore.CYAN + f"[pixi] RMW_IMPLEMENTATION: rmw_fastrtps_cpp")
         print(Fore.CYAN + f"[pixi] FASTRTPS_DEFAULT_PROFILES_FILE: {superclient_path}")
@@ -215,7 +215,8 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
     # Build the RMW configuration lines
     if cfg.is_zenoh:
         rmw_config = f"""export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-export ZENOH_ROUTER={zenoh_endpoint}"""
+export ZENOH_ROUTER_CHECK_ATTEMPTS=10
+export ZENOH_CONFIG_OVERRIDE='listen/endpoints=["tcp/0.0.0.0:0"];connect/endpoints=["{zenoh_endpoint}"]'"""
         middleware_info = f"Zenoh Router: {zenoh_endpoint}"
     elif superclient_path:
         # When using superclient.xml, don't set ROS_DISCOVERY_SERVER as it can conflict

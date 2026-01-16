@@ -9,7 +9,7 @@ from core.sync   import SyncManager
 from core.models import Host
 from python_on_whales.exceptions import DockerException
 
-def launch_main(project_root: str, host_name: str = None, config_file: str = 'config.yaml'):
+def launch_main(project_root: str, host_name: str = None, no_pull: bool = False, config_file: str = 'config.yaml'):
     cfg    = Config.load(project_root, config_file=config_file)
     sync   = SyncManager(cfg)
     docker = DockerHelper()
@@ -48,15 +48,18 @@ def launch_main(project_root: str, host_name: str = None, config_file: str = 'co
             # Only sync builds for components that run on this host
             sync.rsync_builds(project_root, host, host_components)
 
-        # Pull component images on host
-        for comp in host_components:
-            image = comp.image_tag(cfg)
-            print(f"[launch:{host.name}] Pulling {image}...")
-            try:
-                docker.pull_image_on_host(host, image)
-            except DockerException:
-                print(Fore.RED + f"[launch:{host.name}] Failed to pull image on host '{host.name}' ({host.ip})", file=sys.stderr)
-                raise
+        # Pull component images on host (unless --no-pull)
+        if no_pull:
+            print(f"[launch:{host.name}] Skipping image pull (--no-pull)")
+        else:
+            for comp in host_components:
+                image = comp.image_tag(cfg)
+                print(f"[launch:{host.name}] Pulling {image}...")
+                try:
+                    docker.pull_image_on_host(host, image)
+                except DockerException:
+                    print(Fore.RED + f"[launch:{host.name}] Failed to pull image on host '{host.name}' ({host.ip})", file=sys.stderr)
+                    raise
 
         print(f"[launch:{host.name}] Synced builds & compose. Launching containers...")
         try:
