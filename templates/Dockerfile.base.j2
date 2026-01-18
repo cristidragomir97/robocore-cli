@@ -54,9 +54,19 @@ RUN apt-get clean && apt-get update && apt-get install -y --fix-missing \
     python3-colcon-common-extensions \
     python3-rosdep \
     ros-{{ ros_distro }}-rmw-zenoh-cpp \
-    python3-pip && \
-    pip3 install {% if ubuntu == 'noble' %}--break-system-packages {% endif %}-U vcstool && \
+    python3-pip \
+    python3-venv && \
     rosdep init
+
+# Create virtual environment for pip packages to avoid apt conflicts
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv --system-site-packages $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# Ensure venv site-packages and system dist-packages are visible
+ENV PYTHONPATH="$VIRTUAL_ENV/lib/python3.12/site-packages:/usr/lib/python3/dist-packages:$PYTHONPATH"
+
+# Install vcstool in venv (catkin_pkg comes from system apt packages)
+RUN pip install -U vcstool
 
 
 
@@ -106,8 +116,9 @@ RUN . /opt/ros/{{ ros_distro }}/setup.sh && colcon build --symlink-install --ins
 {% endif %}
 
 
-# automatically source ROS2 and common overlay
-RUN echo "source /opt/ros/{{ ros_distro }}/setup.bash" >> ~/.bashrc
+# automatically source ROS2, common overlay, and venv
+RUN echo "source /opt/ros/{{ ros_distro }}/setup.bash" >> ~/.bashrc && \
+    echo "source /opt/venv/bin/activate" >> ~/.bashrc
 {% if has_any_packages %}
 RUN echo "source /ros_ws_common/install/setup.bash" >> ~/.bashrc
 {% endif %}

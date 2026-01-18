@@ -6,7 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO={{ ros_distro }}
 SHELL ["/bin/bash","-lc"]
-#ENV ROS_WS=/ros_ws
+
+# Ensure venv is active for all pip operations
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PYTHONPATH="$VIRTUAL_ENV/lib/python3.12/site-packages:/usr/lib/python3/dist-packages:$PYTHONPATH"
 
 # 1) Install any component-specific system packages
 {% set valid_apt_packages = apt_packages | select('string') | map('trim') | select | list %}
@@ -15,9 +19,9 @@ RUN apt-get update && apt-get install -y {%- for pkg in valid_apt_packages %} {{
   && rm -rf /var/lib/apt/lists/*
 {% endif %}
 
-# 1b) Install any component-specific pip packages
+# 1b) Install any component-specific pip packages (into venv)
 {% if pip_packages %}
-RUN pip3 install --no-cache-dir {% if ros_distro == 'jazzy' %}--break-system-packages {% endif %} {{ pip_packages | join(' ') }}
+RUN pip install --no-cache-dir {{ pip_packages | join(' ') }}
 {% endif %}
 
 # 2) VCS repos → build into /vcs_ws/install
