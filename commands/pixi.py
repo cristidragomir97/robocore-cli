@@ -141,17 +141,19 @@ def pixi_main(project_root: Optional[str] = None, env_name: str = "ros_env", con
     manager = 'pixi'
     print(Fore.GREEN + "[pixi] ✓ pixi found")
 
-    # 2) Check if we're in a pixi project
-    if not os.path.exists('pixi.toml') and not os.path.exists('pyproject.toml'):
-        print(Fore.RED + "[pixi] ERROR: Not in a pixi project (no pixi.toml or pyproject.toml found)")
+    # 3) Load project config (moved up to get project root first)
+    pr = os.path.abspath(project_root or ".")
+
+    # 2) Check if we're in a pixi project (use project root, not cwd)
+    pixi_toml = os.path.join(pr, 'pixi.toml')
+    pyproject_toml = os.path.join(pr, 'pyproject.toml')
+    if not os.path.exists(pixi_toml) and not os.path.exists(pyproject_toml):
+        print(Fore.RED + f"[pixi] ERROR: Not in a pixi project (no pixi.toml or pyproject.toml found in {pr})")
         print(Fore.YELLOW + "[pixi] Initialize a pixi project with:")
         print(Fore.YELLOW + "  pixi init")
         print(Fore.YELLOW + "  pixi add ros-humble-desktop")
         sys.exit(1)
     print(Fore.GREEN + "[pixi] ✓ pixi project found")
-
-    # 3) Load project config
-    pr = os.path.abspath(project_root or ".")
     try:
         cfg = Config.load(pr, config_file=config_file)
     except FileNotFoundError:
@@ -233,6 +235,9 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Pixi activation script
         activation_script = f"""
+# Change to project directory where pixi.toml lives
+cd "{pr}"
+
 # Activate pixi environment
 eval "$(pixi shell-hook)"
 
